@@ -1,0 +1,44 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "copick-web"
+version = "0.1.0"
+description = "Web visualization for copick datasets"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn>=0.25.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.0.0",
+    "copick>=0.8.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.1.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=25.1.0",
+    "ruff>=0.12.0",
+    "pytest>=8.0.0",
+    "pre-commit>=4.0.0",
+]
+
+[project.scripts]
+copick-web = "copick_web.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/copick_web"]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4"]
+ignore = ["E501"]
