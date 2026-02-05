@@ -2,6 +2,8 @@
 
 Web-based visualization tool for cryoET data using the copick data model.
 
+<img width="3008" height="1532" alt="image" src="https://github.com/user-attachments/assets/386284d5-7548-4a30-ace4-83d893a7add2" />
+
 ## Overview
 
 copick-web consists of two components:
