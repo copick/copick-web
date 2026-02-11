@@ -132,6 +132,130 @@ class CopickService:
             return None
         return segs[0].zarr()
 
+    # --- Picks mutation methods ---
+
+    def create_picks(
+        self,
+        run_name: str,
+        object_name: str,
+        user_id: str,
+        session_id: str,
+    ):
+        """Create a new empty picks collection.
+
+        Args:
+            run_name: Name of the run
+            object_name: Name of the pickable object
+            user_id: User identifier
+            session_id: Session identifier
+
+        Returns:
+            The created CopickPicks object
+
+        Raises:
+            ValueError: If run not found or object doesn't exist
+        """
+        run = self.get_run(run_name)
+        if not run:
+            raise ValueError(f"Run '{run_name}' not found")
+
+        # Validate object exists
+        obj = self.get_pickable_object(object_name)
+        if not obj:
+            raise ValueError(f"Pickable object '{object_name}' not found in configuration")
+
+        # Create new picks using copick API
+        picks = run.new_picks(
+            object_name=object_name,
+            session_id=session_id,
+            user_id=user_id,
+        )
+        picks.points = []
+        picks.store()
+        return picks
+
+    def update_picks(
+        self,
+        run_name: str,
+        object_name: str,
+        user_id: str,
+        session_id: str,
+        points: list[dict],
+    ):
+        """Update picks with new points.
+
+        Args:
+            run_name: Name of the run
+            object_name: Name of the pickable object
+            user_id: User identifier
+            session_id: Session identifier
+            points: List of point dicts with x, y, z, instance_id, score
+
+        Returns:
+            The updated CopickPicks object
+
+        Raises:
+            ValueError: If picks not found
+        """
+        from copick.models import CopickLocation, CopickPoint
+
+        pick = self.get_pick(run_name, object_name, user_id, session_id)
+        if not pick:
+            raise ValueError(
+                f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'"
+            )
+
+        # Convert point dicts to CopickPoint objects
+        pick.points = [
+            CopickPoint(
+                location=CopickLocation(x=pt["x"], y=pt["y"], z=pt["z"]),
+                instance_id=pt.get("instance_id"),
+                score=pt.get("score", 1.0),
+            )
+            for pt in points
+        ]
+        pick.store()
+        return pick
+
+    def delete_picks_collection(
+        self,
+        run_name: str,
+        object_name: str,
+        user_id: str,
+        session_id: str,
+    ) -> bool:
+        """Delete a picks collection.
+
+        Args:
+            run_name: Name of the run
+            object_name: Name of the pickable object
+            user_id: User identifier
+            session_id: Session identifier
+
+        Returns:
+            True if deleted successfully
+
+        Raises:
+            ValueError: If run or picks not found
+        """
+        run = self.get_run(run_name)
+        if not run:
+            raise ValueError(f"Run '{run_name}' not found")
+
+        # Verify picks exist first
+        pick = self.get_pick(run_name, object_name, user_id, session_id)
+        if not pick:
+            raise ValueError(
+                f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'"
+            )
+
+        run.delete_picks(
+            object_name=object_name,
+            user_id=user_id,
+            session_id=session_id,
+        )
+        return True
+
 
 # Global service instance (set in main.py)
 copick_service: Optional[CopickService] = None

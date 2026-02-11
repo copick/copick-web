@@ -4,7 +4,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from ..validation import validate_copick_name
 from ..models import (
+    CreatePicksRequest,
+    CreatePicksResponse,
     PicksDetailResponse,
     PicksSummaryResponse,
     PointResponse,
@@ -13,6 +16,7 @@ from ..models import (
     SegmentationSummaryResponse,
     TomogramResponse,
     TomogramSummaryResponse,
+    UpdatePicksRequest,
     VoxelSpacingSummaryResponse,
 )
 from ..services.copick_service import CopickService, get_copick_service
@@ -136,6 +140,110 @@ def get_pick_points(
         color=color,
         points=points,
     )
+
+
+# --- Picks mutation endpoints ---
+
+
+@router.post("/runs/{run_name}/picks", response_model=CreatePicksResponse, status_code=201)
+def create_picks(
+    run_name: str,
+    request: CreatePicksRequest,
+    service: CopickService = Depends(get_copick_service),
+) -> CreatePicksResponse:
+    """Create a new empty picks collection."""
+    # Validate all name fields using copick rules
+    for field_name, value in [
+        ("object_name", request.object_name),
+        ("user_id", request.user_id),
+        ("session_id", request.session_id),
+    ]:
+        is_valid, _, error_msg = validate_copick_name(value)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {error_msg}")
+
+    try:
+        picks = service.create_picks(
+            run_name,
+            request.object_name,
+            request.user_id,
+            request.session_id,
+        )
+        obj = service.get_pickable_object(request.object_name)
+        color = obj.color if obj else (100, 100, 100, 255)
+
+        return CreatePicksResponse(
+            object_name=request.object_name,
+            user_id=request.user_id,
+            session_id=request.session_id,
+            color=color,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", response_model=PicksDetailResponse)
+def update_picks(
+    run_name: str,
+    object_name: str,
+    user_id: str,
+    session_id: str,
+    request: UpdatePicksRequest,
+    service: CopickService = Depends(get_copick_service),
+) -> PicksDetailResponse:
+    """Update picks with new points."""
+    # Check if picks are editable (session_id != "0")
+    if session_id == "0":
+        raise HTTPException(status_code=403, detail="Tool picks (session_id='0') are read-only")
+
+    try:
+        pick = service.update_picks(
+            run_name,
+            object_name,
+            user_id,
+            session_id,
+            [p.model_dump() for p in request.points],
+        )
+        obj = service.get_pickable_object(object_name)
+        color = obj.color if obj else (100, 100, 100, 255)
+
+        return PicksDetailResponse(
+            object_name=object_name,
+            user_id=user_id,
+            session_id=session_id,
+            color=color,
+            points=[
+                PointResponse(
+                    x=pt.location.x,
+                    y=pt.location.y,
+                    z=pt.location.z,
+                    instance_id=pt.instance_id,
+                    score=pt.score,
+                )
+                for pt in pick.points
+            ],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.delete("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", status_code=204)
+def delete_picks(
+    run_name: str,
+    object_name: str,
+    user_id: str,
+    session_id: str,
+    service: CopickService = Depends(get_copick_service),
+):
+    """Delete a picks collection."""
+    # Check if picks are editable (session_id != "0")
+    if session_id == "0":
+        raise HTTPException(status_code=403, detail="Tool picks (session_id='0') are read-only")
+
+    try:
+        service.delete_picks_collection(run_name, object_name, user_id, session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # --- Segmentations endpoints ---

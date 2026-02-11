@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Box, Tabs, Tab, Typography } from "@mui/material";
 import { useCopick } from "@/contexts/CopickContext";
-import { PicksTable } from "./PicksTable";
+import { PicksPanel } from "./PicksPanel";
 import { SegmentationsTable } from "./SegmentationsTable";
 
 interface TabPanelProps {
@@ -43,7 +43,7 @@ export function EntityTabs() {
         <Tab label="Segmentations" />
       </Tabs>
       <TabPanel value={tabIndex} index={0}>
-        <PicksTable runName={state.selectedRunName} />
+        <PicksPanel runName={state.selectedRunName} />
       </TabPanel>
       <TabPanel value={tabIndex} index={1}>
         <SegmentationsTable runName={state.selectedRunName} />

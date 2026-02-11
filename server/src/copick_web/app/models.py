@@ -98,3 +98,39 @@ class SegmentationSummaryResponse(BaseModel):
     is_multilabel: bool
     zarr_url: str
     color: Optional[tuple[int, int, int, int]]
+
+
+# --- Request models for picks mutations ---
+
+
+class CreatePicksRequest(BaseModel):
+    """Request to create a new picks collection."""
+
+    object_name: str
+    user_id: str
+    session_id: str
+
+
+class PointRequest(BaseModel):
+    """Point for create/update operations."""
+
+    x: float
+    y: float
+    z: float
+    instance_id: Optional[int] = None
+    score: Optional[float] = 1.0
+
+
+class UpdatePicksRequest(BaseModel):
+    """Request to update picks points."""
+
+    points: list[PointRequest]
+
+
+class CreatePicksResponse(BaseModel):
+    """Response after creating picks."""
+
+    object_name: str
+    user_id: str
+    session_id: str
+    color: tuple[int, int, int, int]
