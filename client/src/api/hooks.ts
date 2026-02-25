@@ -2,8 +2,9 @@
  * React Query hooks for the copick-web API.
  */
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
+import type { CreatePicksRequest, PointRequest } from "./types";
 
 export function useConfig() {
   return useQuery({
@@ -68,5 +69,68 @@ export function useSegmentations(runName: string | null) {
     queryKey: ["segmentations", runName],
     queryFn: () => api.getSegmentations(runName!),
     enabled: !!runName,
+  });
+}
+
+// --- Picks mutation hooks ---
+
+export function useCreatePicks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ runName, data }: { runName: string; data: CreatePicksRequest }) => api.createPicks(runName, data),
+    onSuccess: (_, { runName }) => {
+      // Invalidate picks list to refetch
+      queryClient.invalidateQueries({ queryKey: ["picks", runName] });
+    },
+  });
+}
+
+export function useUpdatePicks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      runName,
+      objectName,
+      userId,
+      sessionId,
+      points,
+    }: {
+      runName: string;
+      objectName: string;
+      userId: string;
+      sessionId: string;
+      points: PointRequest[];
+    }) => api.updatePicks(runName, objectName, userId, sessionId, { points }),
+    onSuccess: (_, { runName, objectName, userId, sessionId }) => {
+      // Invalidate specific pick points
+      queryClient.invalidateQueries({
+        queryKey: ["pickPoints", runName, objectName, userId, sessionId],
+      });
+      // Also invalidate picks list (point count changed)
+      queryClient.invalidateQueries({ queryKey: ["picks", runName] });
+    },
+  });
+}
+
+export function useDeletePicks() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      runName,
+      objectName,
+      userId,
+      sessionId,
+    }: {
+      runName: string;
+      objectName: string;
+      userId: string;
+      sessionId: string;
+    }) => api.deletePicks(runName, objectName, userId, sessionId),
+    onSuccess: (_, { runName }) => {
+      queryClient.invalidateQueries({ queryKey: ["picks", runName] });
+    },
   });
 }

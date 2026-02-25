@@ -74,3 +74,30 @@ export interface SegmentationSummaryResponse {
   zarr_url: string;
   color: [number, number, number, number] | null;
 }
+
+// --- Request types for picks mutations ---
+
+export interface CreatePicksRequest {
+  object_name: string;
+  user_id: string;
+  session_id: string;
+}
+
+export interface PointRequest {
+  x: number;
+  y: number;
+  z: number;
+  instance_id?: number | null;
+  score?: number | null;
+}
+
+export interface UpdatePicksRequest {
+  points: PointRequest[];
+}
+
+export interface CreatePicksResponse {
+  object_name: string;
+  user_id: string;
+  session_id: string;
+  color: [number, number, number, number];
+}

@@ -15,8 +15,10 @@ import { IdetikProvider, OmeZarrChunkedImageViewer, CustomContrastConfig } from 
 import { ViewerProvider } from "@/contexts/ViewerContext";
 import { useCopick } from "@/contexts/CopickContext";
 import { ViewerControls } from "./ViewerControls";
-import { PicksOverlay } from "@/components/overlays/PicksOverlay";
+import { InteractivePicksOverlay } from "@/components/overlays/InteractivePicksOverlay";
 import { SegmentationOverlay } from "@/components/overlays/SegmentationOverlay";
+import { PickingToolbar } from "@/components/picking/PickingToolbar";
+import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 
 // Fallback contrast limits if statistics calculation fails
 const FALLBACK_CONTRAST_LIMITS: [number, number] = [-3, 3];
@@ -232,6 +234,9 @@ function TomogramViewerContent({ zarrUrl }: TomogramViewerProps) {
 
   return (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Picking toolbar - shows when editing */}
+      <PickingToolbar />
+
       {/* Controls: z-index passed via PROPS, not context */}
       <ViewerControls
         currentZIndex={currentZIndex}
@@ -252,8 +257,15 @@ function TomogramViewerContent({ zarrUrl }: TomogramViewerProps) {
             policy={customPolicy}
           />
         )}
-        {/* Picks overlay */}
-        <PicksOverlay currentZIndex={currentZIndex} />
+        {/* Interactive picks overlay (replaces PicksOverlay) */}
+        <InteractivePicksOverlay currentZIndex={currentZIndex} voxelSpacing={voxelSpacing} />
+        {/* Picking event handler for mouse interactions */}
+        <PickingEventHandler
+          currentZIndex={currentZIndex}
+          onZIndexChange={handleZIndexChange}
+          maxZIndex={zAxisMetadata?.max}
+          voxelSpacing={voxelSpacing}
+        />
         {/* Segmentation overlay */}
         <SegmentationOverlay currentZIndex={currentZIndex} voxelSpacing={voxelSpacing} />
       </Box>
