@@ -1,0 +1,38 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${SERVER_HOST_PORT:-8880}:8000"
+    volumes:
+      - ./server:/app
+      - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
+      - ${COPICK_DATA_DIR:-./data}:/data/copick_data
+    environment:
+      - COPICK_CONFIG_PATH=/data/copick_config.json
+      - CORS_ORIGINS=["http://localhost:${CLIENT_HOST_PORT:-5180}","http://localhost:${SERVER_HOST_PORT:-8880}"]
+      - BASE_PATH=${BASE_PATH:-}
+    networks:
+      - copick-net
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    ports:
+      - "${CLIENT_HOST_PORT:-5180}:5173"
+    volumes:
+      - ./client:/app
+    environment:
+      - API_PROXY_TARGET=http://server:8000
+      - VITE_HMR_CLIENT_PORT=${CLIENT_HOST_PORT:-5180}
+      - BASE_PATH=${BASE_PATH:-}
+    depends_on:
+      - server
+    networks:
+      - copick-net
+
+networks:
+  copick-net:
+    driver: bridge

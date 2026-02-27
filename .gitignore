@@ -162,6 +162,9 @@ pids
 .vscode/
 *.code-workspace
 
+# WIP Scratch folder
+.scratch/
+
 # Vim
 *.swp
 *.swo

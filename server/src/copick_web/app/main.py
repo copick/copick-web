@@ -51,6 +51,7 @@ app = FastAPI(
     description="API server for copick web visualization",
     version="0.1.0",
     lifespan=lifespan,
+    root_path=settings.base_path,
 )
 
 # Configure CORS

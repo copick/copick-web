@@ -1,0 +1,28 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    volumes:
+      - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
+      - ${COPICK_DATA_DIR:-./data}:/data/copick_data
+    environment:
+      - COPICK_CONFIG_PATH=/data/copick_config.json
+      - BASE_PATH=${BASE_PATH:-}
+    networks:
+      - copick-net
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "${SERVER_HOST_PORT:-8880}:80"
+    depends_on:
+      - server
+    networks:
+      - copick-net
+
+networks:
+  copick-net:
+    driver: bridge

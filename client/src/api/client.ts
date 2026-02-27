@@ -16,7 +16,7 @@ import type {
   UpdatePicksRequest,
 } from "./types";
 
-const API_BASE = "/api";
+const API_BASE = `${import.meta.env.BASE_URL}api`;
 
 async function fetchJson<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`);
