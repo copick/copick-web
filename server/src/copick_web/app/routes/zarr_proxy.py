@@ -27,7 +27,7 @@ def _read_from_store(store, path: str) -> bytes:
         if isinstance(data, (bytes, bytearray)):
             return bytes(data)
         # Handle memoryview or other buffer types
-        if hasattr(data, 'tobytes'):
+        if hasattr(data, "tobytes"):
             return data.tobytes()
         return bytes(data)
     except KeyError as e:

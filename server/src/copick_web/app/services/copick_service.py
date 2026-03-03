@@ -201,9 +201,7 @@ class CopickService:
 
         pick = self.get_pick(run_name, object_name, user_id, session_id)
         if not pick:
-            raise ValueError(
-                f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'"
-            )
+            raise ValueError(f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'")
 
         # Convert point dicts to CopickPoint objects
         pick.points = [
@@ -245,9 +243,7 @@ class CopickService:
         # Verify picks exist first
         pick = self.get_pick(run_name, object_name, user_id, session_id)
         if not pick:
-            raise ValueError(
-                f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'"
-            )
+            raise ValueError(f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'")
 
         run.delete_picks(
             object_name=object_name,
