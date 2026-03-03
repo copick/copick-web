@@ -167,7 +167,7 @@ pids
 # WIP Scratch folder
 .scratch/
 
-Claude
+# Claude
 .claude/
 CLAUDE.md
 
