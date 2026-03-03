@@ -24,6 +24,7 @@ services:
       - "${CLIENT_HOST_PORT:-5180}:5173"
     volumes:
       - ./client:/app
+      - /app/node_modules
     environment:
       - API_PROXY_TARGET=http://server:8000
       - VITE_HMR_CLIENT_PORT=${CLIENT_HOST_PORT:-5180}

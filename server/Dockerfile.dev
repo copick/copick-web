@@ -4,4 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev &
 
 WORKDIR /app
 
-CMD pip install -e ".[dev]" && uvicorn copick_web.app.main:app --reload --host 0.0.0.0 --port 8000
+COPY pyproject.toml .
+RUN mkdir -p src/copick_web && touch src/copick_web/__init__.py && \
+    pip install --no-cache-dir -e ".[dev]"
+
+CMD ["sh", "-c", "pip install -e '.[dev]' && uvicorn copick_web.app.main:app --reload --host 0.0.0.0 --port 8000"]

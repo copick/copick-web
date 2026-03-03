@@ -1,0 +1,17 @@
+.git
+.venv
+client/node_modules
+client/dist
+server/__pycache__
+server/*.egg-info
+server/.venv
+server/.mypy_cache
+server/.pytest_cache
+server/.ruff_cache
+*.pyc
+
+# other dev folders
+.scratch
+.idea
+.claude
+.vscode
