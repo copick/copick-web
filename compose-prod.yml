@@ -1,0 +1,28 @@
+services:
+  server:
+    image: ghcr.io/copick/copick-web-server:latest
+    volumes:
+      - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
+      - ${COPICK_DATA_DIR:-./data}:/data/copick_data
+    environment:
+      - COPICK_CONFIG_PATH=/data/copick_config.json
+      - BASE_PATH=${BASE_PATH:-}
+    restart: unless-stopped
+    networks:
+      - copick-net
+
+  client:
+    image: ghcr.io/copick/copick-web-client:latest
+    ports:
+      - "${SERVER_HOST_PORT:-8880}:80"
+    environment:
+      - BASE_PATH=${BASE_PATH:-}
+    depends_on:
+      - server
+    restart: unless-stopped
+    networks:
+      - copick-net
+
+networks:
+  copick-net:
+    driver: bridge
