@@ -1,0 +1,52 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Client: Lint",
+      "type": "shell",
+      "command": "podman compose -f compose-dev.yml exec client npm run lint",
+      "problemMatcher": "$eslint-stylish"
+    },
+    {
+      "label": "Client: Format",
+      "type": "shell",
+      "command": "podman compose -f compose-dev.yml exec client npm run format",
+      "problemMatcher": []
+    },
+    {
+      "label": "Server: Black",
+      "type": "shell",
+      "command": "podman compose -f compose-dev.yml exec server black src/",
+      "problemMatcher": []
+    },
+    {
+      "label": "Server: Ruff Check",
+      "type": "shell",
+      "command": "podman compose -f compose-dev.yml exec server ruff check src/",
+      "problemMatcher": {
+        "owner": "ruff",
+        "fileLocation": ["relative", "${workspaceFolder}/server"],
+        "pattern": {
+          "regexp": "^(.+):(\\d+):(\\d+): (\\w+) (.+)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "code": 4,
+          "message": 5
+        }
+      }
+    },
+    {
+      "label": "Server: Ruff Fix",
+      "type": "shell",
+      "command": "podman compose -f compose-dev.yml exec server ruff check src/ --fix",
+      "problemMatcher": []
+    },
+    {
+      "label": "Lint All",
+      "dependsOn": ["Client: Lint", "Server: Black", "Server: Ruff Check"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

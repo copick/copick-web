@@ -67,7 +67,52 @@ Examples:
 
 ## Development
 
-### Server Development
+We offer dev containers for ease of use or manual dev setups.
+
+### Docker/Podman Compose
+Pre-requisites: Podman (recommended) or Docker installed with Compose extension. Check if installed with `docker-compose version` or `podman compose version`
+- create .env file using .env.example as template. 
+- obtain or use a copick project. Modify config.json's `overlay_root` parameter to `local:/data/copick_data/`
+```
+# Example .env
+# Host ports exposed by the containers
+SERVER_HOST_PORT=8880
+CLIENT_HOST_PORT=5180
+
+# Please modify below with path to copick project, pointing to the copick config json.
+# NOTE: In the config.json, please change "overlay_root": "local:/data/copick_data/"
+# The config gets mounted read-only into the container at /data/copick_config.json.
+COPICK_CONFIG_PATH=.scratch/NPC1_DEMO/configNPC1.json
+
+# Path to your copick data directory on the host machine.
+# This gets mounted into the container at /data/copick_data.
+# Make sure paths inside your copick config reference /data/copick_data.
+COPICK_DATA_DIR=.scratch/NPC1_DEMO/NPC1_DEMO/project
+```
+
+Starting the servers
+```bash
+# start frontend and backend
+podman compose -f compose-dev.yml up
+# when done developing, shutdown with ctrl+c or
+podman compose -f compose-dev.yml down
+```
+Runs both server and client with hot reload, refreshing on code updates. Access on http://localhost:8880 or specified SERVER_HOST_PORT
+
+Access backend API (FastAPI) with http://localhost:8880/docs
+
+To build & check production images
+```bash
+# uses compose.yml
+podman compose up --build -d
+# when done developing, shutdown
+podman compose down
+```
+
+### Manual
+If you do not wish to run on Docker, these are the manual steps. Please see prerequisites section.
+
+#### Server Development
 
 ```bash
 cd server
@@ -78,7 +123,7 @@ export COPICK_CONFIG_PATH=/path/to/config.json
 uvicorn copick_web.app.main:app --reload --port 8000
 ```
 
-### Client Development
+#### Client Development
 
 ```bash
 cd client

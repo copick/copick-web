@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from ..validation import validate_copick_name
 from ..models import (
@@ -50,6 +50,7 @@ def get_tomogram(
     run_name: str,
     voxel_size: float,
     tomo_type: str,
+    request: Request,
     service: CopickService = Depends(get_copick_service),
 ) -> TomogramResponse:
     """Get tomogram details with zarr URL."""
@@ -61,7 +62,8 @@ def get_tomogram(
         )
 
     # Return proxy URL for the zarr store
-    zarr_url = f"/zarr/tomo/{run_name}/{voxel_size}/{tomo_type}"
+    root_path = request.scope.get("root_path", "")
+    zarr_url = f"{root_path}/zarr/tomo/{run_name}/{voxel_size}/{tomo_type}"
     return TomogramResponse(tomo_type=tomo_type, zarr_url=zarr_url)
 
 
@@ -252,6 +254,7 @@ def delete_picks(
 @router.get("/runs/{run_name}/segmentations", response_model=list[SegmentationSummaryResponse])
 def get_segmentations(
     run_name: str,
+    request: Request,
     name: Optional[str] = Query(None),
     user_id: Optional[str] = Query(None),
     session_id: Optional[str] = Query(None),
@@ -264,6 +267,7 @@ def get_segmentations(
         raise HTTPException(status_code=404, detail=f"Run '{run_name}' not found")
 
     segs = service.get_segmentations(run_name, name, user_id, session_id, voxel_size)
+    root_path = request.scope.get("root_path", "")
 
     result = []
     for seg in segs:
@@ -272,7 +276,7 @@ def get_segmentations(
         color = obj.color if obj else None
 
         # Build proxy URL for the zarr store
-        zarr_url = f"/zarr/seg/{run_name}/{seg.name}/{seg.user_id}/{seg.session_id}/{seg.voxel_size}"
+        zarr_url = f"{root_path}/zarr/seg/{run_name}/{seg.name}/{seg.user_id}/{seg.session_id}/{seg.voxel_size}"
 
         result.append(
             SegmentationSummaryResponse(

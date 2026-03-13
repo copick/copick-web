@@ -17,7 +17,7 @@ export function Sidebar() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box
             component="img"
-            src="/copick-logo.png"
+            src={`${import.meta.env.BASE_URL}copick-logo.png`}
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
