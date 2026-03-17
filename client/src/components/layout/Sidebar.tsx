@@ -2,13 +2,17 @@
  * Sidebar with navigation tree and entity tables.
  */
 
-import { Box, Typography, Divider } from "@mui/material";
+import { Box, Typography, Divider, IconButton } from "@mui/material";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 import { useConfig } from "@/api/hooks";
+import { useThemeMode } from "@/contexts/ThemeContext";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 
 export function Sidebar() {
   const { data: config } = useConfig();
+  const { mode, toggleMode } = useThemeMode();
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
@@ -21,9 +25,12 @@ export function Sidebar() {
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
-          <Typography variant="h6" noWrap>
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1 }}>
             {config?.name ?? "Copick Web"}
           </Typography>
+          <IconButton size="small" onClick={toggleMode} title={`Switch to ${mode === "dark" ? "light" : "dark"} mode`}>
+            {mode === "dark" ? <LightModeIcon fontSize="small" /> : <DarkModeIcon fontSize="small" />}
+          </IconButton>
         </Box>
         {config?.description && (
           <Typography variant="caption" color="text.secondary" noWrap>
