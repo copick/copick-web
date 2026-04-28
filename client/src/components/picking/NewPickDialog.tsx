@@ -19,6 +19,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useConfig, useObjects, usePicks } from "@/api/hooks";
+import { useProjectId } from "@/contexts/CopickContext";
 import { validateCopickName, generateSessionId } from "@/utils/validation";
 import { rgbaToHex } from "@/utils/colorUtils";
 
@@ -30,9 +31,10 @@ interface NewPickDialogProps {
 }
 
 export function NewPickDialog({ open, onClose, onSubmit, runName }: NewPickDialogProps) {
-  const { data: config } = useConfig();
-  const { data: objects } = useObjects();
-  const { data: existingPicks } = usePicks(runName);
+  const projectId = useProjectId();
+  const { data: config } = useConfig(projectId);
+  const { data: objects } = useObjects(projectId);
+  const { data: existingPicks } = usePicks(projectId, runName);
 
   // Form state
   const [objectName, setObjectName] = useState("");

@@ -2,6 +2,23 @@
  * API response types matching the server's Pydantic models.
  */
 
+export interface ProjectSummaryResponse {
+  id: string;
+  source: "registry" | "local";
+  session_name?: string | null;
+  run_name?: string | null;
+  cluster_id?: string | null;
+  scope?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  proc_run_id?: number | null;
+  config_url?: string | null;
+  data_url?: string | null;
+  root_url?: string | null;
+  name?: string | null;
+  description?: string | null;
+}
+
 export interface ConfigResponse {
   name: string | null;
   description: string | null;

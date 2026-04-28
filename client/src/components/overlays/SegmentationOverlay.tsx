@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useIdetik } from "@idetik/react";
 import { OmeZarrImageSource, LabelImageLayer, Region } from "@idetik/core";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { useSegmentations, useObjects } from "@/api/hooks";
 
 interface SegmentationOverlayProps {
@@ -17,16 +17,17 @@ interface SegmentationOverlayProps {
 }
 
 export function SegmentationOverlay({ currentZIndex, voxelSpacing }: SegmentationOverlayProps) {
+  const projectId = useProjectId();
   const { state: copickState } = useCopick();
 
   // Get all visible segmentations
   const visibleSegmentations = copickState.selectedSegmentations.filter((s) => s.visible);
 
   // Get segmentation metadata from API
-  const { data: segmentations } = useSegmentations(copickState.selectedRunName);
+  const { data: segmentations } = useSegmentations(projectId, copickState.selectedRunName);
 
   // Get objects from copick config for label→color mapping
-  const { data: objects } = useObjects();
+  const { data: objects } = useObjects(projectId);
 
   // Build label→color map from copick objects config
   // Each object has a `label` field (numeric ID used in multilabel segmentations)
@@ -106,7 +107,8 @@ function SegmentationLayer({
 
   // Create source once when component mounts
   useEffect(() => {
-    const fullUrl = `${window.location.origin}${zarrUrl}`;
+    // If url is relative, prepend window origin. idetik's HTTP source needs an absolute URL.
+    const fullUrl = /^https?:\/\//i.test(zarrUrl) ? zarrUrl : `${window.location.origin}${zarrUrl}`;
     const source = OmeZarrImageSource.fromHttp({ url: fullUrl });
     sourceRef.current = source;
 

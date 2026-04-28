@@ -1,14 +1,13 @@
-import { CopickProvider } from "@/contexts/CopickContext";
-import { PickingProvider } from "@/contexts/PickingContext";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { Routes, Route } from "react-router-dom";
+import { ProjectListPage } from "@/pages/ProjectListPage";
+import { ProjectPage } from "@/pages/ProjectPage";
 
 function App() {
   return (
-    <CopickProvider>
-      <PickingProvider>
-        <AppLayout />
-      </PickingProvider>
-    </CopickProvider>
+    <Routes>
+      <Route path="/" element={<ProjectListPage />} />
+      <Route path="/projects/:projectId/*" element={<ProjectPage />} />
+    </Routes>
   );
 }
 

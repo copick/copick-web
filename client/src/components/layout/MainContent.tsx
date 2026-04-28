@@ -3,15 +3,16 @@
  */
 
 import { Box, Typography } from "@mui/material";
-import { useTomogramSelection } from "@/contexts/CopickContext";
+import { useProjectId, useTomogramSelection } from "@/contexts/CopickContext";
 import { useTomogram } from "@/api/hooks";
 import { TomogramViewer } from "@/components/viewer/TomogramViewer";
 
 export function MainContent() {
+  const projectId = useProjectId();
   // Use selective hook to prevent re-renders when picks/segmentation visibility changes
   const { selectedRunName, selectedVoxelSize, selectedTomoType } = useTomogramSelection();
 
-  const { data: tomogram, isLoading } = useTomogram(selectedRunName, selectedVoxelSize, selectedTomoType);
+  const { data: tomogram, isLoading } = useTomogram(projectId, selectedRunName, selectedVoxelSize, selectedTomoType);
 
   // Show placeholder when no tomogram is selected
   if (!selectedRunName || !selectedVoxelSize || !selectedTomoType) {

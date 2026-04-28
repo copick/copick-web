@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { usePicks } from "@/api/hooks";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { rgbaToHex } from "@/utils/colorUtils";
 
 interface PicksTableProps {
@@ -24,7 +24,8 @@ interface PicksTableProps {
 }
 
 export function PicksTable({ runName }: PicksTableProps) {
-  const { data: picks, isLoading, error } = usePicks(runName);
+  const projectId = useProjectId();
+  const { data: picks, isLoading, error } = usePicks(projectId, runName);
   const { state, togglePickVisibility, addPick } = useCopick();
 
   if (isLoading) {

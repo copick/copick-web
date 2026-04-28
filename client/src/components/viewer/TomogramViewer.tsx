@@ -20,14 +20,43 @@ import { SegmentationOverlay } from "@/components/overlays/SegmentationOverlay";
 import { PickingToolbar } from "@/components/picking/PickingToolbar";
 import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 
-// Fallback contrast limits if statistics calculation fails
-const FALLBACK_CONTRAST_LIMITS: [number, number] = [-3, 3];
-
 interface ContrastStats {
   mean: number;
   std: number;
   min: number;
   max: number;
+}
+
+/**
+ * Resolve a zarr URL to a full URL. Registry-direct URLs come through absolute
+ * (https://...) and must be passed through; local-proxy URLs are relative paths
+ * that need the page origin prepended.
+ */
+function resolveZarrUrl(zarrUrl: string): string {
+  if (/^https?:\/\//i.test(zarrUrl)) return zarrUrl;
+  return `${window.location.origin}${zarrUrl}`;
+}
+
+/**
+ * Read contrast limits written into the zarr's `.zattrs` (if computed by package zarrczar thru Embrella).
+ */
+async function getContrastFromZattrs(zarrUrl: string): Promise<ContrastStats | null> {
+  try {
+    const response = await fetch(`${zarrUrl}/.zattrs`);
+    if (!response.ok) return null;
+    const zattrs = await response.json();
+    const limits = zattrs?.image_statistics?.contrast_limits;
+    if (!limits || typeof limits.low !== "number" || typeof limits.high !== "number") {
+      return null;
+    }
+    // Map {low, high} into the {mean, std, min, max} the consumer expects so
+    // mean ± 3*std reproduces [low, high].
+    const mean = (limits.low + limits.high) / 2;
+    const std = (limits.high - limits.low) / 6;
+    return { mean, std, min: limits.low, max: limits.high };
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -153,7 +182,8 @@ function TomogramViewerContent({ zarrUrl }: TomogramViewerProps) {
   // STABLE setter from useState - never changes reference
   const [, setZMaxIndex] = useState<number | undefined>(undefined);
 
-  const fullZarrUrl = `${window.location.origin}${zarrUrl}`;
+  const fullZarrUrl = resolveZarrUrl(zarrUrl);
+  const isRegistryUrl = /^https?:\/\//i.test(zarrUrl);
 
   // Policy with CORRECT function and configuration (EXACTLY like umbrella)
   const customPolicy = useMemo(
@@ -178,16 +208,27 @@ function TomogramViewerContent({ zarrUrl }: TomogramViewerProps) {
     });
   }, [fullZarrUrl]);
 
-  // Calculate contrast stats separately (slower) - updates contrast after viewer is already rendering
+  // Registry-direct zarrs: try .zattrs first, fall back to sampling
+  // when the writer didn't populate image_statistics. Local proxy zarrs: sample data directly.
+  // No hardcoded fallback — if neither path produces stats we surface the failure.
   useEffect(() => {
     setContrastStats(null);
 
-    calculateContrastStats(fullZarrUrl).then((stats) => {
-      if (stats) {
-        setContrastStats(stats);
+    const load = async (): Promise<ContrastStats> => {
+      if (isRegistryUrl) {
+        const fromZattrs = await getContrastFromZattrs(fullZarrUrl);
+        if (fromZattrs) return fromZattrs;
       }
-    });
-  }, [fullZarrUrl]);
+      const fromSamples = await calculateContrastStats(fullZarrUrl);
+      if (fromSamples) return fromSamples;
+      throw new Error(
+        `Could not determine contrast limits for ${fullZarrUrl}: ` +
+          `.zattrs has no image_statistics.contrast_limits and data sampling failed.`,
+      );
+    };
+
+    load().then(setContrastStats);
+  }, [fullZarrUrl, isRegistryUrl]);
 
   // Compute custom contrast config based on statistics (mean ± 3*std)
   const customContrast = useMemo<CustomContrastConfig | undefined>(() => {
@@ -246,12 +287,11 @@ function TomogramViewerContent({ zarrUrl }: TomogramViewerProps) {
 
       {/* Main viewer area */}
       <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
-        {/* Conditionally render viewer only when z-axis metadata is ready */}
-        {zAxisMetadata && zProp && (
+        {/* Render viewer once z-axis metadata AND contrast stats are ready */}
+        {zAxisMetadata && zProp && customContrast && (
           <OmeZarrChunkedImageViewer
             sourceUrl={fullZarrUrl}
             z={zProp}
-            fallbackContrastLimits={FALLBACK_CONTRAST_LIMITS}
             customContrast={customContrast}
             scaleBar={{ visible: true, align: "start" }}
             policy={customPolicy}

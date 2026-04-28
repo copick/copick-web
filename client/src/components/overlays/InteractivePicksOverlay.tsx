@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from "react";
 import { useIdetik } from "@idetik/react";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
 import { usePickPoints } from "@/api/hooks";
 import { PicksLayer } from "./layers/PicksLayer";
@@ -81,11 +81,12 @@ function ReadOnlyPickPointsLayer({
   currentZIndex,
   voxelSpacing,
 }: ReadOnlyPickPointsLayerProps) {
+  const projectId = useProjectId();
   const { state } = useCopick();
   const { runtime } = useIdetik();
   const layerRef = useRef<PicksLayer | null>(null);
 
-  const { data: picks } = usePickPoints(state.selectedRunName, objectName, userId, sessionId);
+  const { data: picks } = usePickPoints(projectId, state.selectedRunName, objectName, userId, sessionId);
 
   useEffect(() => {
     if (!runtime || !picks || picks.points.length === 0) {

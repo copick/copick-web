@@ -9,6 +9,7 @@ import type {
   PickableObjectResponse,
   PicksDetailResponse,
   PicksSummaryResponse,
+  ProjectSummaryResponse,
   RunDetailResponse,
   RunSummaryResponse,
   SegmentationSummaryResponse,
@@ -17,6 +18,8 @@ import type {
 } from "./types";
 
 const API_BASE = `${import.meta.env.BASE_URL}api`;
+
+const projectBase = (projectId: string) => `/projects/${encodeURIComponent(projectId)}`;
 
 async function fetchJson<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`);
@@ -53,6 +56,14 @@ async function putJson<T, R>(endpoint: string, data: T): Promise<R> {
   return response.json();
 }
 
+async function postNoBody(endpoint: string): Promise<void> {
+  const response = await fetch(`${API_BASE}${endpoint}`, { method: "POST" });
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`API error ${response.status}: ${error}`);
+  }
+}
+
 async function deleteRequest(endpoint: string): Promise<void> {
   const response = await fetch(`${API_BASE}${endpoint}`, { method: "DELETE" });
   if (!response.ok) {
@@ -62,46 +73,81 @@ async function deleteRequest(endpoint: string): Promise<void> {
 }
 
 export const api = {
-  // Config endpoints
-  getConfig: () => fetchJson<ConfigResponse>("/config"),
+  // Project listing (no scope)
+  getProjects: () => fetchJson<ProjectSummaryResponse[]>("/projects"),
 
-  getObjects: () => fetchJson<PickableObjectResponse[]>("/objects"),
+  reloadProject: (projectId: string) =>
+    postNoBody(`${projectBase(projectId)}/reload`),
+
+  // Config endpoints
+  getConfig: (projectId: string) =>
+    fetchJson<ConfigResponse>(`${projectBase(projectId)}/config`),
+
+  getObjects: (projectId: string) =>
+    fetchJson<PickableObjectResponse[]>(`${projectBase(projectId)}/objects`),
 
   // Run endpoints
-  getRuns: () => fetchJson<RunSummaryResponse[]>("/runs"),
+  getRuns: (projectId: string) =>
+    fetchJson<RunSummaryResponse[]>(`${projectBase(projectId)}/runs`),
 
-  getRun: (runName: string) => fetchJson<RunDetailResponse>(`/runs/${encodeURIComponent(runName)}`),
+  getRun: (projectId: string, runName: string) =>
+    fetchJson<RunDetailResponse>(`${projectBase(projectId)}/runs/${encodeURIComponent(runName)}`),
 
   // Tomogram endpoints
-  getTomogram: (runName: string, voxelSize: number, tomoType: string) =>
+  getTomogram: (projectId: string, runName: string, voxelSize: number, tomoType: string) =>
     fetchJson<TomogramResponse>(
-      `/runs/${encodeURIComponent(runName)}/voxel_spacings/${voxelSize}/tomograms/${encodeURIComponent(tomoType)}`
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/voxel_spacings/${voxelSize}/tomograms/${encodeURIComponent(tomoType)}`
     ),
 
   // Picks endpoints
-  getPicks: (runName: string) => fetchJson<PicksSummaryResponse[]>(`/runs/${encodeURIComponent(runName)}/picks`),
+  getPicks: (projectId: string, runName: string) =>
+    fetchJson<PicksSummaryResponse[]>(`${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/picks`),
 
-  getPickPoints: (runName: string, objectName: string, userId: string, sessionId: string) =>
+  getPickPoints: (
+    projectId: string,
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string
+  ) =>
     fetchJson<PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
     ),
 
   // Segmentation endpoints
-  getSegmentations: (runName: string) =>
-    fetchJson<SegmentationSummaryResponse[]>(`/runs/${encodeURIComponent(runName)}/segmentations`),
+  getSegmentations: (projectId: string, runName: string) =>
+    fetchJson<SegmentationSummaryResponse[]>(
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/segmentations`
+    ),
 
   // Picks mutation endpoints
-  createPicks: (runName: string, data: CreatePicksRequest) =>
-    postJson<CreatePicksRequest, CreatePicksResponse>(`/runs/${encodeURIComponent(runName)}/picks`, data),
-
-  updatePicks: (runName: string, objectName: string, userId: string, sessionId: string, data: UpdatePicksRequest) =>
-    putJson<UpdatePicksRequest, PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+  createPicks: (projectId: string, runName: string, data: CreatePicksRequest) =>
+    postJson<CreatePicksRequest, CreatePicksResponse>(
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/picks`,
       data
     ),
 
-  deletePicks: (runName: string, objectName: string, userId: string, sessionId: string) =>
+  updatePicks: (
+    projectId: string,
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string,
+    data: UpdatePicksRequest
+  ) =>
+    putJson<UpdatePicksRequest, PicksDetailResponse>(
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      data
+    ),
+
+  deletePicks: (
+    projectId: string,
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string
+  ) =>
     deleteRequest(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
+      `${projectBase(projectId)}/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
     ),
 };

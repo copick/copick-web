@@ -8,7 +8,7 @@
 
 import { useEffect, useRef } from "react";
 import { useIdetik } from "@idetik/react";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { usePickPoints } from "@/api/hooks";
 import { PicksLayer } from "./layers/PicksLayer";
 
@@ -58,6 +58,7 @@ function PickPointsLayer({
   sessionId,
   currentZIndex,
 }: PickPointsLayerProps) {
+  const projectId = useProjectId();
   const { state } = useCopick();
   const { runtime } = useIdetik();
   const layerRef = useRef<PicksLayer | null>(null);
@@ -66,7 +67,7 @@ function PickPointsLayer({
   const voxelSpacing = state.selectedVoxelSize ?? 20;
 
   // Fetch the pick points
-  const { data: picks } = usePickPoints(state.selectedRunName, objectName, userId, sessionId);
+  const { data: picks } = usePickPoints(projectId, state.selectedRunName, objectName, userId, sessionId);
 
   // Create/update layer when picks data changes
   useEffect(() => {
