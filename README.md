@@ -17,11 +17,14 @@ copick-web consists of two components:
 - View tomogram slices with channel controls and scale bar
 - Display particle picks as point overlays
 - View segmentation overlays with multilabel support
+- Multi-tenant: host many copick projects from one server, sourced from local
+  config files and/or an external project registry API. Lazy `CopickService`
+  loading with a per-project LRU cache.
 
 ## Prerequisites
 
 - Python 3.9+
-- Node.js 20.19.0+
+- Node.js 24+
 - A copick configuration file pointing to your data
 
 ## Quick Start
@@ -42,27 +45,42 @@ npm run build:server
 ### Running
 
 ```bash
-# Start copick-web with your config file
+# Start copick-web with one or more local config files
 copick-web /path/to/your/copick_config.json
+
+# Or with several configs / a directory of configs
+copick-web a.json b.json --config-dir /path/to/configs
+
+# Or pulling projects from a registry API
+copick-web --registry-url http://localhost:8000/copick/v1
+
+# Mix and match (locals win on id collision)
+copick-web a.json --registry-url http://localhost:8000/copick/v1
 ```
 
-This will start the server and open your browser to http://localhost:8000
+This will start the server and open your browser to http://localhost:8000.
+With one project the UI auto-redirects to it; with multiple, you land on a
+project list page.
 
 ### CLI Options
 
 ```bash
-copick-web CONFIG [OPTIONS]
+copick-web [CONFIGS...] [OPTIONS]
+
+Arguments:
+  CONFIGS                 Zero or more local copick config JSON files.
 
 Options:
-  --host TEXT     Host to bind to (default: 127.0.0.1)
-  --port INTEGER  Port to bind to (default: 8000)
-  --no-browser    Don't open browser automatically
-  --help          Show this message and exit.
+  --config-dir PATH       Directory of copick config JSONs to register.
+  --registry-url URL      Base URL of the project registry API
+                          (e.g. http://localhost:8000/copick/v1).
+                          The server appends /projects/ itself.
+  --host TEXT             Host to bind to (default: 127.0.0.1)
+  --port INTEGER          Port to bind to (default: 8000)
+  --no-browser            Don't open browser automatically
+  --help                  Show this message and exit.
 
-Examples:
-  copick-web config.json                    # Start with defaults
-  copick-web config.json --port 9000        # Custom port
-  copick-web config.json --no-browser       # Don't auto-open browser
+At least one of CONFIGS, --config-dir, or --registry-url is required.
 ```
 
 ## Development
@@ -76,8 +94,8 @@ Pre-requisites: Podman (recommended) or Docker installed with Compose extension.
 ```
 # Example .env
 # Host ports exposed by the containers
-SERVER_HOST_PORT=8880
-CLIENT_HOST_PORT=5180
+DEV_SERVER_HOST_PORT=8880
+DEV_CLIENT_HOST_PORT=5180
 
 # Please modify below with path to copick project, pointing to the copick config json.
 # NOTE: In the config.json, please change "overlay_root": "local:/data/copick_data/"
@@ -97,7 +115,16 @@ podman compose -f compose-dev.yml up
 # when done developing, shutdown with ctrl+c or
 podman compose -f compose-dev.yml down
 ```
-Runs both server and client with hot reload, refreshing on code updates. Access on http://localhost:8880 or specified SERVER_HOST_PORT
+Runs both server and client with hot reload, refreshing on code updates. Access the app on http://localhost:5180 (or specified `DEV_CLIENT_HOST_PORT`); the API is published separately on http://localhost:8880 (or `DEV_SERVER_HOST_PORT`) for direct Swagger / curl access.
+
+To also pull projects from a registry API, add `REGISTRY_URL` to `.env`. From
+inside the container, the host registry is reachable via
+`http://host.containers.internal:<port>/copick/v1` (Podman) or
+`http://host.docker.internal:<port>/copick/v1` (Docker Desktop).
+
+For a registry-only deployment (no local config), comment out the
+`COPICK_CONFIG_PATH` volume mount in your compose file and set
+`COPICK_CONFIG_PATHS=[]` on the `server` service.
 
 Access backend API (FastAPI) with http://localhost:8880/docs
 
@@ -118,8 +145,10 @@ If you do not wish to run on Docker, these are the manual steps. Please see prer
 cd server
 pip install -e ".[dev]"
 
-# Run with uvicorn for hot-reload
-export COPICK_CONFIG_PATH=/path/to/config.json
+# Run with uvicorn for hot-reload. Settings are read from .env or env vars.
+export COPICK_CONFIG_PATHS='["/path/to/config.json"]'
+# Optional: also pull projects from a registry
+# export REGISTRY_URL=http://localhost:8000/copick/v1
 uvicorn copick_web.app.main:app --reload --port 8000
 ```
 
@@ -151,57 +180,87 @@ npm run format
 
 ### Environment Variables
 
+All settings are read by `pydantic-settings` from a `.env` file or process
+environment. List-typed values use JSON-array syntax.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `COPICK_CONFIG_PATH` | `copick_config.json` | Path to copick configuration file |
-| `CORS_ORIGINS` | `["http://localhost:5173", "http://localhost:8000"]` | Allowed CORS origins |
-| `HOST` | `0.0.0.0` | Server host |
-| `PORT` | `8000` | Server port |
+| `COPICK_CONFIG_PATHS` | `[]` | JSON array of local copick config file paths to register at startup. |
+| `REGISTRY_URL` | _(unset)_ | Base URL of the project registry API (e.g. `http://localhost:8000/copick/v1`). The server appends `/projects/` itself. |
+| `REGISTRY_REFRESH_SECONDS` | `60` | Background refresh interval for the registry list. |
+| `SERVICE_CACHE_SIZE` | `6` | Max materialized `CopickService` instances kept in memory (LRU). |
+| `CORS_ORIGINS` | localhost:5173/8000 | Allowed CORS origins. |
+| `HOST` | `0.0.0.0` | Server host. |
+| `PORT` | `8000` | Server port. |
+| `BASE_PATH` | `""` | URL prefix when running behind a reverse proxy. |
 
-Create a `.env` file in the `server/` directory to set these values.
+At least one of `COPICK_CONFIG_PATHS` or `REGISTRY_URL` must be set; otherwise
+startup fails. The CLI sets `COPICK_CONFIG_PATHS` and `REGISTRY_URL` from its
+flags before importing the app, so settings.json/.env are only consulted when
+running uvicorn directly (or in containers).
 
 ## API Endpoints
 
-### Metadata
+All metadata and zarr-proxy routes are scoped under a `project_id`.
 
-- `GET /api/config` - Project configuration
-- `GET /api/objects` - Pickable objects
-- `GET /api/runs` - List of runs
-- `GET /api/runs/{run}` - Run details with voxel spacings
-- `GET /api/runs/{run}/picks` - List of picks for a run
-- `GET /api/runs/{run}/picks/{obj}/{user}/{session}` - Pick points
-- `GET /api/runs/{run}/segmentations` - List of segmentations
+### Project listing
+
+- `GET /api/projects` - All projects from registry + local configs (locals win on id collision).
+
+### Metadata (per project)
+
+- `GET /api/projects/{project_id}/config` - Project configuration
+- `GET /api/projects/{project_id}/objects` - Pickable objects
+- `GET /api/projects/{project_id}/runs` - List of runs
+- `GET /api/projects/{project_id}/runs/{run}` - Run details with voxel spacings
+- `GET /api/projects/{project_id}/runs/{run}/picks` - List of picks for a run
+- `GET /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Pick points
+- `POST /api/projects/{project_id}/runs/{run}/picks` - Create picks
+- `PUT /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Update picks
+- `DELETE /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Delete picks
+- `GET /api/projects/{project_id}/runs/{run}/segmentations` - List of segmentations
 
 ### Zarr Proxy
 
-- `GET /zarr/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
-- `GET /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
+- `GET /zarr/{project_id}/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
+- `GET /zarr/{project_id}/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
+
+### Project IDs
+
+- Local configs: filename stem (e.g. `copick_config.json` → `copick_config`).
+- Registry projects: `{cluster_id}-{session_name}-{run_name}`
+  (e.g. `bruno-26mar13b-run001`).
 
 ## Architecture
 
 ```
 copick-web/
-├── server/                     # FastAPI server package
-│   ├── pyproject.toml          # Package config with CLI entry point
+├── server/                          # FastAPI server package
+│   ├── pyproject.toml               # Package config with CLI entry point
 │   └── src/copick_web/
-│       ├── cli.py              # CLI entry point
-│       ├── static/             # Built client files
+│       ├── cli.py                   # CLI entry point
+│       ├── static/                  # Built client files
 │       └── app/
-│           ├── main.py         # FastAPI application
-│           ├── config.py       # Settings
-│           ├── models.py       # Pydantic response models
-│           ├── routes/         # API route handlers
-│           └── services/       # Business logic (CopickService)
-└── client/                     # React application
+│           ├── main.py              # FastAPI application + lifespan
+│           ├── config.py            # Settings
+│           ├── models.py            # Pydantic response models
+│           ├── dependencies.py      # FastAPI deps (project-scoped)
+│           ├── routes/              # API route handlers (per-project)
+│           └── services/
+│               ├── copick_service.py    # Per-project copick wrapper
+│               ├── registry_client.py   # httpx client for registry API
+│               └── project_registry.py  # Multi-project metadata + LRU cache
+└── client/                          # React application
     └── src/
-        ├── api/                # API client and hooks
-        ├── components/         # React components
-        │   ├── layout/         # App layout
-        │   ├── navigation/     # Run tree
-        │   ├── entities/       # Picks/segmentations tables
-        │   ├── viewer/         # Tomogram viewer
-        │   └── overlays/       # Picks/segmentation overlays
-        └── contexts/           # React context providers
+        ├── api/                     # API client and hooks (project-scoped)
+        ├── pages/                   # ProjectListPage, ProjectPage (router)
+        ├── components/              # React components
+        │   ├── layout/              # App layout
+        │   ├── navigation/          # Run tree
+        │   ├── entities/            # Picks/segmentations tables
+        │   ├── viewer/              # Tomogram viewer
+        │   └── overlays/            # Picks/segmentation overlays
+        └── contexts/                # React context providers
 ```
 
 ## License
