@@ -16,6 +16,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  optimizeDeps: {
+    exclude: ["@idetik/core"],
+  },
   server: {
     port: 5173,
     hmr: hmrClientPort ? { clientPort: hmrClientPort } : undefined,
