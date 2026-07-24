@@ -35,7 +35,11 @@ export function useRun(runName: string | null) {
   });
 }
 
-export function useTomogram(runName: string | null, voxelSize: number | null, tomoType: string | null) {
+export function useTomogram(
+  runName: string | null,
+  voxelSize: number | null,
+  tomoType: string | null,
+) {
   return useQuery({
     queryKey: ["tomogram", runName, voxelSize, tomoType],
     queryFn: () => api.getTomogram(runName!, voxelSize!, tomoType!),
@@ -55,11 +59,12 @@ export function usePickPoints(
   runName: string | null,
   objectName: string | null,
   userId: string | null,
-  sessionId: string | null
+  sessionId: string | null,
 ) {
   return useQuery({
     queryKey: ["pickPoints", runName, objectName, userId, sessionId],
-    queryFn: () => api.getPickPoints(runName!, objectName!, userId!, sessionId!),
+    queryFn: () =>
+      api.getPickPoints(runName!, objectName!, userId!, sessionId!),
     enabled: !!(runName && objectName && userId && sessionId),
   });
 }
@@ -78,7 +83,13 @@ export function useCreatePicks() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ runName, data }: { runName: string; data: CreatePicksRequest }) => api.createPicks(runName, data),
+    mutationFn: ({
+      runName,
+      data,
+    }: {
+      runName: string;
+      data: CreatePicksRequest;
+    }) => api.createPicks(runName, data),
     onSuccess: (_, { runName }) => {
       // Invalidate picks list to refetch
       queryClient.invalidateQueries({ queryKey: ["picks", runName] });

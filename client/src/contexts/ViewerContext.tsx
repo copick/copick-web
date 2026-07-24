@@ -24,7 +24,9 @@ const ViewerContext = createContext<ViewerContextType | null>(null);
 export function ViewerProvider({ children }: { children: ReactNode }) {
   const [axis, setAxis] = useState<ViewAxis>("xy");
   const [sliceIndex, setSliceIndex] = useState(0);
-  const [maxSliceIndex, setMaxSliceIndex] = useState<number | undefined>(undefined);
+  const [maxSliceIndex, setMaxSliceIndex] = useState<number | undefined>(
+    undefined,
+  );
 
   const state: ViewerState = {
     axis,
@@ -33,7 +35,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ViewerContext.Provider value={{ state, setAxis, setSliceIndex, setMaxSliceIndex }}>
+    <ViewerContext.Provider
+      value={{ state, setAxis, setSliceIndex, setMaxSliceIndex }}
+    >
       {children}
     </ViewerContext.Provider>
   );

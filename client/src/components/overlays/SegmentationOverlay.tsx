@@ -15,13 +15,19 @@ interface SegmentationOverlayProps {
   voxelSpacing: number;
 }
 
-export function SegmentationOverlay({ viewer, currentZIndex, voxelSpacing }: SegmentationOverlayProps) {
+export function SegmentationOverlay({
+  viewer,
+  currentZIndex,
+  voxelSpacing,
+}: SegmentationOverlayProps) {
   const { state: copickState } = useCopick();
   const { data: segmentations } = useSegmentations(copickState.selectedRunName);
   const { data: objects } = useObjects();
 
   const worldZ = currentZIndex * voxelSpacing;
-  const visibleSegmentations = copickState.selectedSegmentations.filter((s) => s.visible);
+  const visibleSegmentations = copickState.selectedSegmentations.filter(
+    (s) => s.visible,
+  );
 
   const labelColorMap = new Map<number, Rgba>();
   if (objects) {
@@ -44,7 +50,7 @@ export function SegmentationOverlay({ viewer, currentZIndex, voxelSpacing }: Seg
             s.name === seg.name &&
             s.user_id === seg.userId &&
             s.session_id === seg.sessionId &&
-            s.voxel_size === seg.voxelSize
+            s.voxel_size === seg.voxelSize,
         );
         if (!segData?.zarr_url) return null;
 
@@ -54,7 +60,8 @@ export function SegmentationOverlay({ viewer, currentZIndex, voxelSpacing }: Seg
             lookupTable.set(label, toLabelColor(rgba));
           }
         } else {
-          const color = objects?.find((obj) => obj.name === seg.name)?.color ?? segData.color ?? [255, 0, 0, 128];
+          const color = objects?.find((obj) => obj.name === seg.name)?.color ??
+            segData.color ?? [255, 0, 0, 128];
           lookupTable.set(1, toLabelColor(color));
         }
 

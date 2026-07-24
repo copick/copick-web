@@ -9,7 +9,7 @@ export interface Contrast {
 
 export async function calculateContrast(
   source: OmeZarrImageSource,
-  signal: AbortSignal
+  signal: AbortSignal,
 ): Promise<Contrast | null> {
   try {
     const dims = source.getDimensions();

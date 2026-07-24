@@ -12,7 +12,12 @@ interface SegmentationLayerProps {
   worldZ: number;
 }
 
-export function SegmentationLayer({ viewer, sourceUrl, lookupTable, worldZ }: SegmentationLayerProps) {
+export function SegmentationLayer({
+  viewer,
+  sourceUrl,
+  lookupTable,
+  worldZ,
+}: SegmentationLayerProps) {
   const sliceCoordsRef = useRef<SliceCoordinates>({});
   const lookupTableRef = useRef(lookupTable);
   const worldZRef = useRef(worldZ);

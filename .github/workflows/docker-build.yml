@@ -1,0 +1,123 @@
+name: Docker Build Check
+
+# Builds the server and client images on pull requests to catch build
+# compatibility issues (e.g. an out-of-sync lock file) before merging, then
+# runs a lightweight smoke test that boots each container and curls it.
+# Nothing is pushed — this is build + run validation only. The actual publish
+# happens in docker-publish.yml on push to main.
+
+on:
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'server/**'
+      - '.github/workflows/docker-build.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-server:
+    name: Build & smoke-test server image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build server image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: copick-web-server:ci
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+      - name: Smoke test server
+        run: |
+          set -euo pipefail
+          # Minimal local (filesystem) copick config so the app can boot without
+          # a real storage backend. Loading it touches no storage, so /health works.
+          cat > ci-copick-config.json <<'EOF'
+          {
+            "config_type": "filesystem",
+            "name": "ci-smoke-test",
+            "description": "Minimal config for CI smoke test",
+            "version": "0.2.0",
+            "pickable_objects": [
+              {"name": "smoke", "is_particle": true, "label": 1, "color": [0, 255, 0, 255], "radius": 10.0}
+            ],
+            "overlay_root": "local:///tmp/copick-overlay",
+            "overlay_fs_args": {"auto_mkdir": true}
+          }
+          EOF
+          docker run -d --name copick-server -p 8000:8000 \
+            -e COPICK_CONFIG_PATH=/data/copick_config.json \
+            -v "$PWD/ci-copick-config.json:/data/copick_config.json:ro" \
+            copick-web-server:ci
+          echo "Waiting for server /health ..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health | grep -q healthy; then
+              echo "Server is healthy"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Server did not become healthy in time"
+          docker logs copick-server || true
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f copick-server 2>/dev/null || true
+
+  build-client:
+    name: Build & smoke-test client image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build client image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: client/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: copick-web-client:ci
+          cache-from: type=gha,scope=client
+          cache-to: type=gha,mode=max,scope=client
+
+      - name: Smoke test client
+        run: |
+          set -euo pipefail
+          # nginx.conf proxies /api, /zarr and /health to the "server" upstream,
+          # which nginx resolves at startup. That host only exists under compose,
+          # so stub it here or nginx refuses to boot. The SPA root (/) is served
+          # statically and never touches the proxy, so the target is irrelevant.
+          docker run -d --name copick-client --add-host server:127.0.0.1 -p 8080:80 copick-web-client:ci
+          # /health proxies to the (absent) server container, so smoke-test the
+          # SPA root instead: nginx must serve the built index.html.
+          echo "Waiting for client to serve the SPA ..."
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/ | grep -q 'id="root"'; then
+              echo "Client is serving the SPA"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Client did not serve the SPA in time"
+          docker logs copick-client || true
+          exit 1
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f copick-client 2>/dev/null || true

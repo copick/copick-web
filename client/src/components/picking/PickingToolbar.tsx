@@ -2,7 +2,14 @@
  * Toolbar for selecting picking tools and displaying current edit state.
  */
 
-import { Box, ToggleButtonGroup, ToggleButton, Button, Chip, Tooltip } from "@mui/material";
+import {
+  Box,
+  ToggleButtonGroup,
+  ToggleButton,
+  Button,
+  Chip,
+  Tooltip,
+} from "@mui/material";
 import PanToolIcon from "@mui/icons-material/PanTool";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import HighlightAltIcon from "@mui/icons-material/HighlightAlt";
@@ -14,10 +21,14 @@ import { useUpdatePicks } from "@/api/hooks";
 import { rgbaToCss } from "@/utils/colorUtils";
 
 export function PickingToolbar() {
-  const { state, setTool, stopEditing, markSaved, deleteSelectedPoints } = usePicking();
+  const { state, setTool, stopEditing, markSaved, deleteSelectedPoints } =
+    usePicking();
   const updatePicks = useUpdatePicks();
 
-  const handleToolChange = (_: React.MouseEvent<HTMLElement>, tool: PickingTool | null) => {
+  const handleToolChange = (
+    _: React.MouseEvent<HTMLElement>,
+    tool: PickingTool | null,
+  ) => {
     if (tool) {
       setTool(tool);
     }
@@ -81,7 +92,12 @@ export function PickingToolbar() {
       />
 
       {/* Tool selector */}
-      <ToggleButtonGroup value={state.activeTool} exclusive onChange={handleToolChange} size="small">
+      <ToggleButtonGroup
+        value={state.activeTool}
+        exclusive
+        onChange={handleToolChange}
+        size="small"
+      >
         <Tooltip title="View mode (pan/zoom)">
           <ToggleButton value="view">
             <PanToolIcon fontSize="small" />
@@ -105,7 +121,11 @@ export function PickingToolbar() {
       </ToggleButtonGroup>
 
       {/* Point count */}
-      <Chip label={`${state.localPoints.length} points`} size="small" variant="outlined" />
+      <Chip
+        label={`${state.localPoints.length} points`}
+        size="small"
+        variant="outlined"
+      />
 
       {/* Selection info and delete button */}
       {state.selectedPointIds.size > 0 && (
@@ -124,7 +144,9 @@ export function PickingToolbar() {
       <Box sx={{ flexGrow: 1 }} />
 
       {/* Unsaved changes indicator */}
-      {state.hasUnsavedChanges && <Chip label="Unsaved changes" size="small" color="warning" />}
+      {state.hasUnsavedChanges && (
+        <Chip label="Unsaved changes" size="small" color="warning" />
+      )}
 
       {/* Save/Cancel buttons */}
       <Button

@@ -29,7 +29,12 @@ interface NewPickDialogProps {
   runName: string;
 }
 
-export function NewPickDialog({ open, onClose, onSubmit, runName }: NewPickDialogProps) {
+export function NewPickDialog({
+  open,
+  onClose,
+  onSubmit,
+  runName,
+}: NewPickDialogProps) {
   const { data: config } = useConfig();
   const { data: objects } = useObjects();
   const { data: existingPicks } = usePicks(runName);
@@ -60,7 +65,8 @@ export function NewPickDialog({ open, onClose, onSubmit, runName }: NewPickDialo
   const userValidation = validateCopickName(userId);
   const sessionValidation = validateCopickName(sessionId);
 
-  const isValid = objectName && userValidation.isValid && sessionValidation.isValid;
+  const isValid =
+    objectName && userValidation.isValid && sessionValidation.isValid;
 
   const handleSubmit = () => {
     if (isValid) {
@@ -88,7 +94,11 @@ export function NewPickDialog({ open, onClose, onSubmit, runName }: NewPickDialo
           {/* Object selector */}
           <FormControl fullWidth>
             <InputLabel>Object</InputLabel>
-            <Select value={objectName} onChange={(e) => setObjectName(e.target.value)} label="Object">
+            <Select
+              value={objectName}
+              onChange={(e) => setObjectName(e.target.value)}
+              label="Object"
+            >
               {objects?.map((obj) => (
                 <MenuItem
                   key={obj.name}
@@ -118,7 +128,11 @@ export function NewPickDialog({ open, onClose, onSubmit, runName }: NewPickDialo
             value={userId}
             onChange={(e) => setUserId(e.target.value)}
             error={!userValidation.isValid && userId.length > 0}
-            helperText={!userValidation.isValid && userId.length > 0 ? userValidation.errorMessage : ""}
+            helperText={
+              !userValidation.isValid && userId.length > 0
+                ? userValidation.errorMessage
+                : ""
+            }
             fullWidth
           />
 

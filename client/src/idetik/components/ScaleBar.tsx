@@ -41,7 +41,7 @@ function getUnitAbbreviation(unit: string | undefined): string {
 class ScientificNumber {
   constructor(
     readonly mantissa: number,
-    readonly exponent: number
+    readonly exponent: number,
   ) {}
 
   value(): number {
@@ -58,7 +58,10 @@ class ScientificNumber {
   static floor(x: number): ScientificNumber {
     if (x === 0) return new ScientificNumber(0, 0);
     const exponent = Math.floor(Math.log10(Math.abs(x)));
-    return new ScientificNumber(Math.floor(x / Math.pow(10, exponent)), exponent);
+    return new ScientificNumber(
+      Math.floor(x / Math.pow(10, exponent)),
+      exponent,
+    );
   }
 }
 
@@ -115,12 +118,18 @@ export function ScaleBar({ viewer, unit, align = "start" }: ScaleBarProps) {
   }, [viewer, unitAbbreviation]);
 
   return (
-    <div ref={containerRef} className={`flex flex-col ${ITEMS_CLASS[align]} w-full h-full gap-sds-xs`}>
+    <div
+      ref={containerRef}
+      className={`flex flex-col ${ITEMS_CLASS[align]} w-full h-full gap-sds-xs`}
+    >
       <div
         ref={textRef}
         className={`text-white text-base [text-shadow:black_1px_1px_1px,black_-1px_-1px_1px,black_1px_-1px_1px,black_-1px_1px_1px] font-sds-code ${TEXT_CLASS[align]}`}
       />
-      <div ref={lineRef} className="bg-white h-sds-m border-[thin] border-solid border-black" />
+      <div
+        ref={lineRef}
+        className="bg-white h-sds-m border-[thin] border-solid border-black"
+      />
     </div>
   );
 }

@@ -2,8 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 
-const apiProxyTarget =
-  process.env.API_PROXY_TARGET || "http://localhost:8000";
+const apiProxyTarget = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const hmrClientPort = process.env.VITE_HMR_CLIENT_PORT
   ? Number(process.env.VITE_HMR_CLIENT_PORT)
   : undefined;

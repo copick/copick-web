@@ -16,7 +16,11 @@ interface TabPanelProps {
 
 function TabPanel({ children, value, index }: TabPanelProps) {
   return (
-    <Box role="tabpanel" hidden={value !== index} sx={{ overflow: "auto", flexGrow: 1 }}>
+    <Box
+      role="tabpanel"
+      hidden={value !== index}
+      sx={{ overflow: "auto", flexGrow: 1 }}
+    >
       {value === index && children}
     </Box>
   );
@@ -38,7 +42,12 @@ export function EntityTabs() {
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} variant="fullWidth" sx={{ borderBottom: 1, borderColor: "divider" }}>
+      <Tabs
+        value={tabIndex}
+        onChange={(_, v) => setTabIndex(v)}
+        variant="fullWidth"
+        sx={{ borderBottom: 1, borderColor: "divider" }}
+      >
         <Tab label="Picks" />
         <Tab label="Segmentations" />
       </Tabs>

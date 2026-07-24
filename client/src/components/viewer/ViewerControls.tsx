@@ -5,7 +5,13 @@
  * and avoid race conditions. Axis selection still uses context.
  */
 
-import { Box, Slider, Typography, ToggleButtonGroup, ToggleButton } from "@mui/material";
+import {
+  Box,
+  Slider,
+  Typography,
+  ToggleButtonGroup,
+  ToggleButton,
+} from "@mui/material";
 import { useViewer, type ViewAxis } from "@/contexts/ViewerContext";
 
 interface ViewerControlsProps {
@@ -14,11 +20,18 @@ interface ViewerControlsProps {
   onZIndexChange: (newZIndex: number) => void;
 }
 
-export function ViewerControls({ currentZIndex, maxZIndex, onZIndexChange }: ViewerControlsProps) {
+export function ViewerControls({
+  currentZIndex,
+  maxZIndex,
+  onZIndexChange,
+}: ViewerControlsProps) {
   // Axis selection still uses context (independent of z-index issues)
   const { state, setAxis } = useViewer();
 
-  const handleAxisChange = (_: React.MouseEvent<HTMLElement>, newAxis: ViewAxis | null) => {
+  const handleAxisChange = (
+    _: React.MouseEvent<HTMLElement>,
+    newAxis: ViewAxis | null,
+  ) => {
     if (newAxis) {
       setAxis(newAxis);
     }
@@ -46,7 +59,12 @@ export function ViewerControls({ currentZIndex, maxZIndex, onZIndexChange }: Vie
         <Typography variant="body2" color="text.secondary">
           View:
         </Typography>
-        <ToggleButtonGroup value={state.axis} exclusive onChange={handleAxisChange} size="small">
+        <ToggleButtonGroup
+          value={state.axis}
+          exclusive
+          onChange={handleAxisChange}
+          size="small"
+        >
           <ToggleButton value="xy">XY</ToggleButton>
           <ToggleButton value="xz" disabled title="Coming soon">
             XZ
@@ -58,8 +76,20 @@ export function ViewerControls({ currentZIndex, maxZIndex, onZIndexChange }: Vie
       </Box>
 
       {/* Slice slider - uses props (not context) */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexGrow: 1, minWidth: 200 }}>
-        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          flexGrow: 1,
+          minWidth: 200,
+        }}
+      >
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ whiteSpace: "nowrap" }}
+        >
           Z: {currentZIndex}
         </Typography>
         <Slider
