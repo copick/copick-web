@@ -20,7 +20,12 @@ export class PicksLayer extends Layer {
   private currentZ_ = 0;
   private needsUpdate_ = true;
 
-  constructor({ points, color, pointSizePixels, zFadeRadius }: PicksLayerOptions) {
+  constructor({
+    points,
+    color,
+    pointSizePixels,
+    zFadeRadius,
+  }: PicksLayerOptions) {
     super({ blendMode: "normal" });
     this.points_ = points;
     this.rgb_ = [color[0] / 255, color[1] / 255, color[2] / 255];

@@ -5,6 +5,7 @@
 
 // Invalid characters pattern from copick.util.escape
 // Invalid: <>:"/\|?* (Windows), control chars, spaces, and underscores
+// eslint-disable-next-line no-control-regex -- control chars are intentionally matched for sanitization
 const INVALID_CHARS_PATTERN = /[<>:"/\\|?*\x00-\x1F\x7F\s_]/g;
 
 export interface ValidationResult {
@@ -21,7 +22,11 @@ export interface ValidationResult {
  */
 export function validateCopickName(inputStr: string): ValidationResult {
   if (!inputStr) {
-    return { isValid: false, sanitized: "", errorMessage: "Name cannot be empty" };
+    return {
+      isValid: false,
+      sanitized: "",
+      errorMessage: "Name cannot be empty",
+    };
   }
 
   // Check if string contains invalid characters
@@ -38,7 +43,11 @@ export function validateCopickName(inputStr: string): ValidationResult {
   sanitized = sanitized.replace(/^-+|-+$/g, "");
 
   if (sanitized === "") {
-    return { isValid: false, sanitized: "", errorMessage: "Name cannot consist only of invalid characters" };
+    return {
+      isValid: false,
+      sanitized: "",
+      errorMessage: "Name cannot consist only of invalid characters",
+    };
   }
 
   if (hasInvalid) {
@@ -46,10 +55,16 @@ export function validateCopickName(inputStr: string): ValidationResult {
     INVALID_CHARS_PATTERN.lastIndex = 0;
     const invalidFound = new Set(inputStr.match(INVALID_CHARS_PATTERN) || []);
     const invalidList = Array.from(invalidFound)
-      .map((char) => (char === " " ? "'space'" : char === "_" ? "'underscore'" : `'${char}'`))
+      .map((char) =>
+        char === " " ? "'space'" : char === "_" ? "'underscore'" : `'${char}'`,
+      )
       .sort()
       .join(", ");
-    return { isValid: false, sanitized, errorMessage: `Invalid characters: ${invalidList}` };
+    return {
+      isValid: false,
+      sanitized,
+      errorMessage: `Invalid characters: ${invalidList}`,
+    };
   }
 
   return { isValid: true, sanitized: inputStr, errorMessage: "" };

@@ -16,7 +16,11 @@ interface InteractivePicksOverlayProps {
   voxelSpacing: number;
 }
 
-export function InteractivePicksOverlay({ viewer, currentZIndex, voxelSpacing }: InteractivePicksOverlayProps) {
+export function InteractivePicksOverlay({
+  viewer,
+  currentZIndex,
+  voxelSpacing,
+}: InteractivePicksOverlayProps) {
   const { state: copickState } = useCopick();
   const { state: pickingState, isEditing } = usePicking();
 
@@ -35,7 +39,7 @@ export function InteractivePicksOverlay({ viewer, currentZIndex, voxelSpacing }:
             !isEditing ||
             pick.objectName !== pickingState.editingPicks?.objectName ||
             pick.userId !== pickingState.editingPicks?.userId ||
-            pick.sessionId !== pickingState.editingPicks?.sessionId
+            pick.sessionId !== pickingState.editingPicks?.sessionId,
         )
         .map((pick) => (
           <ReadOnlyPicks
@@ -75,9 +79,20 @@ function ReadOnlyPicks({
   worldZ: number;
 }) {
   const { state } = useCopick();
-  const { data: picks } = usePickPoints(state.selectedRunName, objectName, userId, sessionId);
+  const { data: picks } = usePickPoints(
+    state.selectedRunName,
+    objectName,
+    userId,
+    sessionId,
+  );
   return (
-    <PointsLayer viewer={viewer} points={picks?.points} color={picks?.color} pointSizePixels={DEFAULT_POINT_SIZE_PIXELS} worldZ={worldZ} />
+    <PointsLayer
+      viewer={viewer}
+      points={picks?.points}
+      color={picks?.color}
+      pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
+      worldZ={worldZ}
+    />
   );
 }
 
@@ -94,17 +109,40 @@ function EditablePicks({
   color: Rgba;
   worldZ: number;
 }) {
-  const normalPoints = useMemo(() => points.filter((p) => !selectedIds.has(p.id)), [points, selectedIds]);
-  const selectedPoints = useMemo(() => points.filter((p) => selectedIds.has(p.id)), [points, selectedIds]);
+  const normalPoints = useMemo(
+    () => points.filter((p) => !selectedIds.has(p.id)),
+    [points, selectedIds],
+  );
+  const selectedPoints = useMemo(
+    () => points.filter((p) => selectedIds.has(p.id)),
+    [points, selectedIds],
+  );
   const highlightColor = useMemo<Rgba>(
-    () => [Math.min(255, color[0] + 80), Math.min(255, color[1] + 80), Math.min(255, color[2] + 80), 255],
-    [color]
+    () => [
+      Math.min(255, color[0] + 80),
+      Math.min(255, color[1] + 80),
+      Math.min(255, color[2] + 80),
+      255,
+    ],
+    [color],
   );
 
   return (
     <>
-      <PointsLayer viewer={viewer} points={normalPoints} color={color} pointSizePixels={DEFAULT_POINT_SIZE_PIXELS} worldZ={worldZ} />
-      <PointsLayer viewer={viewer} points={selectedPoints} color={highlightColor} pointSizePixels={SELECTED_POINT_SIZE_PIXELS} worldZ={worldZ} />
+      <PointsLayer
+        viewer={viewer}
+        points={normalPoints}
+        color={color}
+        pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
+        worldZ={worldZ}
+      />
+      <PointsLayer
+        viewer={viewer}
+        points={selectedPoints}
+        color={highlightColor}
+        pointSizePixels={SELECTED_POINT_SIZE_PIXELS}
+        worldZ={worldZ}
+      />
     </>
   );
 }

@@ -1,4 +1,10 @@
-import { Idetik as IdetikRuntime, Layer, Overlay, OrthographicCamera, PanZoomControls } from "@idetik/core";
+import {
+  Idetik as IdetikRuntime,
+  Layer,
+  Overlay,
+  OrthographicCamera,
+  PanZoomControls,
+} from "@idetik/core";
 
 export class Idetik {
   private readonly runtime_: IdetikRuntime;
@@ -8,7 +14,12 @@ export class Idetik {
     this.camera_ = new OrthographicCamera(0, 128, 0, 128, -1000, 1000);
     this.runtime_ = new IdetikRuntime({
       canvas,
-      viewports: [{ camera: this.camera_, cameraControls: new PanZoomControls(this.camera_) }],
+      viewports: [
+        {
+          camera: this.camera_,
+          cameraControls: new PanZoomControls(this.camera_),
+        },
+      ],
     });
     this.runtime_.start();
   }
@@ -40,7 +51,10 @@ export class Idetik {
   }
 
   worldPerPixel(): number {
-    return (this.camera_.transform.scale[0] * this.camera_.viewportSize[0]) / this.runtime_.canvas.clientWidth;
+    return (
+      (this.camera_.transform.scale[0] * this.camera_.viewportSize[0]) /
+      this.runtime_.canvas.clientWidth
+    );
   }
 
   screenToWorld(clientX: number, clientY: number): { x: number; y: number } {

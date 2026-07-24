@@ -22,8 +22,12 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
   const [maxZ, setMaxZ] = useState<number | undefined>(undefined);
 
   const [color, setColor] = useState("#ffffff");
-  const [contrastLimits, setContrastLimits] = useState<[number, number] | undefined>(undefined);
-  const [contrastRange, setContrastRange] = useState<[number, number] | undefined>(undefined);
+  const [contrastLimits, setContrastLimits] = useState<
+    [number, number] | undefined
+  >(undefined);
+  const [contrastRange, setContrastRange] = useState<
+    [number, number] | undefined
+  >(undefined);
   const autoLimitsRef = useRef<[number, number] | null>(null);
 
   const handleZMaxIndex = useCallback((max: number | undefined) => {
@@ -49,7 +53,11 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
     <ViewerProvider>
       <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
         <PickingToolbar />
-        <ViewerControls currentZIndex={zIndex} maxZIndex={maxZ} onZIndexChange={setZIndex} />
+        <ViewerControls
+          currentZIndex={zIndex}
+          maxZIndex={maxZ}
+          onZIndexChange={setZIndex}
+        />
         <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
           <Canvas canvasRefCallback={canvasRefCallback} />
           <ImageLayer
@@ -61,8 +69,16 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
             onZMaxIndex={handleZMaxIndex}
             onAutoContrast={handleAutoContrast}
           />
-          <SegmentationOverlay viewer={viewer} currentZIndex={zIndex} voxelSpacing={voxelSpacing} />
-          <InteractivePicksOverlay viewer={viewer} currentZIndex={zIndex} voxelSpacing={voxelSpacing} />
+          <SegmentationOverlay
+            viewer={viewer}
+            currentZIndex={zIndex}
+            voxelSpacing={voxelSpacing}
+          />
+          <InteractivePicksOverlay
+            viewer={viewer}
+            currentZIndex={zIndex}
+            voxelSpacing={voxelSpacing}
+          />
           <PickingEventHandler
             viewer={viewer}
             currentZIndex={zIndex}
@@ -82,7 +98,17 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
               />
             </Box>
           )}
-          <Box sx={{ position: "absolute", bottom: 0, left: 0, width: "20%", m: 2, userSelect: "none", pointerEvents: "none" }}>
+          <Box
+            sx={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              width: "20%",
+              m: 2,
+              userSelect: "none",
+              pointerEvents: "none",
+            }}
+          >
             <ScaleBar viewer={viewer} unit="angstrom" align="start" />
           </Box>
         </Box>

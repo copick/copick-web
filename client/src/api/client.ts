@@ -70,38 +70,63 @@ export const api = {
   // Run endpoints
   getRuns: () => fetchJson<RunSummaryResponse[]>("/runs"),
 
-  getRun: (runName: string) => fetchJson<RunDetailResponse>(`/runs/${encodeURIComponent(runName)}`),
+  getRun: (runName: string) =>
+    fetchJson<RunDetailResponse>(`/runs/${encodeURIComponent(runName)}`),
 
   // Tomogram endpoints
   getTomogram: (runName: string, voxelSize: number, tomoType: string) =>
     fetchJson<TomogramResponse>(
-      `/runs/${encodeURIComponent(runName)}/voxel_spacings/${voxelSize}/tomograms/${encodeURIComponent(tomoType)}`
+      `/runs/${encodeURIComponent(runName)}/voxel_spacings/${voxelSize}/tomograms/${encodeURIComponent(tomoType)}`,
     ),
 
   // Picks endpoints
-  getPicks: (runName: string) => fetchJson<PicksSummaryResponse[]>(`/runs/${encodeURIComponent(runName)}/picks`),
+  getPicks: (runName: string) =>
+    fetchJson<PicksSummaryResponse[]>(
+      `/runs/${encodeURIComponent(runName)}/picks`,
+    ),
 
-  getPickPoints: (runName: string, objectName: string, userId: string, sessionId: string) =>
+  getPickPoints: (
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string,
+  ) =>
     fetchJson<PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
+      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
     ),
 
   // Segmentation endpoints
   getSegmentations: (runName: string) =>
-    fetchJson<SegmentationSummaryResponse[]>(`/runs/${encodeURIComponent(runName)}/segmentations`),
+    fetchJson<SegmentationSummaryResponse[]>(
+      `/runs/${encodeURIComponent(runName)}/segmentations`,
+    ),
 
   // Picks mutation endpoints
   createPicks: (runName: string, data: CreatePicksRequest) =>
-    postJson<CreatePicksRequest, CreatePicksResponse>(`/runs/${encodeURIComponent(runName)}/picks`, data),
-
-  updatePicks: (runName: string, objectName: string, userId: string, sessionId: string, data: UpdatePicksRequest) =>
-    putJson<UpdatePicksRequest, PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
-      data
+    postJson<CreatePicksRequest, CreatePicksResponse>(
+      `/runs/${encodeURIComponent(runName)}/picks`,
+      data,
     ),
 
-  deletePicks: (runName: string, objectName: string, userId: string, sessionId: string) =>
+  updatePicks: (
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string,
+    data: UpdatePicksRequest,
+  ) =>
+    putJson<UpdatePicksRequest, PicksDetailResponse>(
+      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      data,
+    ),
+
+  deletePicks: (
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string,
+  ) =>
     deleteRequest(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`
+      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
     ),
 };

@@ -15,7 +15,13 @@ interface PointsLayerProps {
   worldZ: number;
 }
 
-export function PointsLayer({ viewer, points, color, pointSizePixels, worldZ }: PointsLayerProps) {
+export function PointsLayer({
+  viewer,
+  points,
+  color,
+  pointSizePixels,
+  worldZ,
+}: PointsLayerProps) {
   const layerRef = useRef<PicksLayer | null>(null);
   const worldZRef = useRef(worldZ);
   worldZRef.current = worldZ;
@@ -23,7 +29,12 @@ export function PointsLayer({ viewer, points, color, pointSizePixels, worldZ }: 
   useEffect(() => {
     if (!points || points.length === 0 || !color) return;
 
-    const layer = new PicksLayer({ points, color, pointSizePixels, zFadeRadius: Z_FADE_RADIUS });
+    const layer = new PicksLayer({
+      points,
+      color,
+      pointSizePixels,
+      zFadeRadius: Z_FADE_RADIUS,
+    });
     layer.setCurrentZ(worldZRef.current);
     viewer.addLayer(layer);
     layerRef.current = layer;

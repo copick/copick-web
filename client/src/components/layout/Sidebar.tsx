@@ -11,7 +11,14 @@ export function Sidebar() {
   const { data: config } = useConfig();
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
@@ -35,7 +42,10 @@ export function Sidebar() {
       {/* Navigation tree */}
       <Box sx={{ flexGrow: 1, overflow: "auto", minHeight: 0 }}>
         <Box sx={{ p: 1 }}>
-          <Typography variant="subtitle2" sx={{ px: 1, py: 0.5, color: "text.secondary" }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ px: 1, py: 0.5, color: "text.secondary" }}
+          >
             Runs
           </Typography>
           <RunTree />

@@ -1,4 +1,9 @@
-import { Color, ImageLayer as CoreImageLayer, OmeZarrImageSource, SliceCoordinates } from "@idetik/core";
+import {
+  Color,
+  ImageLayer as CoreImageLayer,
+  OmeZarrImageSource,
+  SliceCoordinates,
+} from "@idetik/core";
 import { useEffect, useRef } from "react";
 import { Idetik } from "../Idetik";
 import { imageSourcePolicy } from "../policy";
@@ -98,7 +103,11 @@ export function ImageLayer({
 
   useEffect(() => {
     layerRef.current?.setChannelProps([
-      { visible: true, color: Color.fromRgbHex(color), contrastLimits: contrastLimits ?? DEFAULT_CONTRAST_LIMITS },
+      {
+        visible: true,
+        color: Color.fromRgbHex(color),
+        contrastLimits: contrastLimits ?? DEFAULT_CONTRAST_LIMITS,
+      },
     ]);
   }, [color, contrastLimits]);
 

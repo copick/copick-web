@@ -17,7 +17,14 @@ export function PickingEventHandler({
   maxZIndex,
   voxelSpacing,
 }: PickingEventHandlerProps) {
-  const { state: pickingState, addPoint, deletePoint, selectPoint, clearSelection, isEditing } = usePicking();
+  const {
+    state: pickingState,
+    addPoint,
+    deletePoint,
+    selectPoint,
+    clearSelection,
+    isEditing,
+  } = usePicking();
 
   const findNearestPoint = useCallback(
     (worldX: number, worldY: number, threshold = 50): PickingPoint | null => {
@@ -38,7 +45,7 @@ export function PickingEventHandler({
 
       return nearest;
     },
-    [isEditing, pickingState.localPoints, currentZIndex, voxelSpacing]
+    [isEditing, pickingState.localPoints, currentZIndex, voxelSpacing],
   );
 
   const handleClick = useCallback(
@@ -83,7 +90,7 @@ export function PickingEventHandler({
       clearSelection,
       currentZIndex,
       voxelSpacing,
-    ]
+    ],
   );
 
   const handleWheel = useCallback(
@@ -96,7 +103,7 @@ export function PickingEventHandler({
       const newIndex = Math.max(0, Math.min(maxZIndex, currentZIndex + delta));
       if (newIndex !== currentZIndex) onZIndexChange(newIndex);
     },
-    [currentZIndex, maxZIndex, onZIndexChange]
+    [currentZIndex, maxZIndex, onZIndexChange],
   );
 
   useEffect(() => {

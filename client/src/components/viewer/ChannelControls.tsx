@@ -11,7 +11,9 @@ interface ChannelControlsProps {
 }
 
 const formatValue = (v: number) =>
-  Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.01) ? v.toExponential(1) : v.toFixed(2);
+  Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.01)
+    ? v.toExponential(1)
+    : v.toFixed(2);
 
 export function ChannelControls({
   color,
@@ -41,7 +43,14 @@ export function ChannelControls({
         type="color"
         value={color}
         onChange={(e) => onColorChange(e.target.value)}
-        sx={{ width: 24, height: 24, p: 0, border: 0, bgcolor: "transparent", cursor: "pointer" }}
+        sx={{
+          width: 24,
+          height: 24,
+          p: 0,
+          border: 0,
+          bgcolor: "transparent",
+          cursor: "pointer",
+        }}
       />
       <Slider
         size="small"
@@ -57,7 +66,12 @@ export function ChannelControls({
           if (lo < hi) onContrastChange([lo, hi]);
         }}
       />
-      <IconButton size="small" onClick={onResetContrast} title="Reset contrast" sx={{ color: "white" }}>
+      <IconButton
+        size="small"
+        onClick={onResetContrast}
+        title="Reset contrast"
+        sx={{ color: "white" }}
+      >
         <RestartAlt fontSize="small" />
       </IconButton>
     </Paper>
