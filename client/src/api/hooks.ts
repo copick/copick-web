@@ -50,7 +50,7 @@ export function useTomogram(
   projectId: string | null,
   runName: string | null,
   voxelSize: number | null,
-  tomoType: string | null
+  tomoType: string | null,
 ) {
   return useQuery({
     queryKey: ["tomogram", projectId, runName, voxelSize, tomoType],
@@ -76,12 +76,16 @@ export function usePickPoints(
 ) {
   return useQuery({
     queryKey: ["pickPoints", projectId, runName, objectName, userId, sessionId],
-    queryFn: () => api.getPickPoints(projectId!, runName!, objectName!, userId!, sessionId!),
+    queryFn: () =>
+      api.getPickPoints(projectId!, runName!, objectName!, userId!, sessionId!),
     enabled: !!(projectId && runName && objectName && userId && sessionId),
   });
 }
 
-export function useSegmentations(projectId: string | null, runName: string | null) {
+export function useSegmentations(
+  projectId: string | null,
+  runName: string | null,
+) {
   return useQuery({
     queryKey: ["segmentations", projectId, runName],
     queryFn: () => api.getSegmentations(projectId!, runName!),
@@ -121,7 +125,9 @@ export function useCreatePicks() {
       data: CreatePicksRequest;
     }) => api.createPicks(projectId, runName, data),
     onSuccess: (_, { projectId, runName }) => {
-      queryClient.invalidateQueries({ queryKey: ["picks", projectId, runName] });
+      queryClient.invalidateQueries({
+        queryKey: ["picks", projectId, runName],
+      });
     },
   });
 }
@@ -144,12 +150,24 @@ export function useUpdatePicks() {
       userId: string;
       sessionId: string;
       points: PointRequest[];
-    }) => api.updatePicks(projectId, runName, objectName, userId, sessionId, { points }),
+    }) =>
+      api.updatePicks(projectId, runName, objectName, userId, sessionId, {
+        points,
+      }),
     onSuccess: (_, { projectId, runName, objectName, userId, sessionId }) => {
       queryClient.invalidateQueries({
-        queryKey: ["pickPoints", projectId, runName, objectName, userId, sessionId],
+        queryKey: [
+          "pickPoints",
+          projectId,
+          runName,
+          objectName,
+          userId,
+          sessionId,
+        ],
       });
-      queryClient.invalidateQueries({ queryKey: ["picks", projectId, runName] });
+      queryClient.invalidateQueries({
+        queryKey: ["picks", projectId, runName],
+      });
     },
   });
 }
@@ -172,7 +190,9 @@ export function useDeletePicks() {
       sessionId: string;
     }) => api.deletePicks(projectId, runName, objectName, userId, sessionId),
     onSuccess: (_, { projectId, runName }) => {
-      queryClient.invalidateQueries({ queryKey: ["picks", projectId, runName] });
+      queryClient.invalidateQueries({
+        queryKey: ["picks", projectId, runName],
+      });
     },
   });
 }

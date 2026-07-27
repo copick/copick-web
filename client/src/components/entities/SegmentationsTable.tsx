@@ -25,7 +25,11 @@ interface SegmentationsTableProps {
 
 export function SegmentationsTable({ runName }: SegmentationsTableProps) {
   const projectId = useProjectId();
-  const { data: segmentations, isLoading, error } = useSegmentations(projectId, runName);
+  const {
+    data: segmentations,
+    isLoading,
+    error,
+  } = useSegmentations(projectId, runName);
   const { state, toggleSegmentationVisibility, addSegmentation } = useCopick();
 
   if (isLoading) {

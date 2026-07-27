@@ -36,10 +36,10 @@ def _read_from_store(store, path: str) -> bytes:
         return bytes(data)
     except KeyError as e:
         logger.warning(f"Path '{path}' not found in store: {e}")
-        raise HTTPException(status_code=404, detail=f"Path '{path}' not found in store")
+        raise HTTPException(status_code=404, detail=f"Path '{path}' not found in store") from e
     except Exception as e:
         logger.error(f"Error reading '{path}' from store: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error reading from store: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reading from store: {e}") from e
 
 
 async def _read_with_timeout(
@@ -77,7 +77,7 @@ async def _read_with_timeout(
             raise HTTPException(
                 status_code=504,
                 detail=f"Zarr read timed out after {timeout:.1f}s; project cache evicted, please retry",
-            )
+            ) from None
 
 
 @router.get("/tomo/{run_name}/{voxel_size}/{tomo_type}/{path:path}")

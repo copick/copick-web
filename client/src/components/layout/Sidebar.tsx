@@ -2,7 +2,15 @@
  * Sidebar with navigation tree and entity tables.
  */
 
-import { Box, Typography, Divider, Button, IconButton, Tooltip, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Divider,
+  Button,
+  IconButton,
+  Tooltip,
+  CircularProgress,
+} from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { Link } from "react-router-dom";
@@ -65,7 +73,11 @@ export function Sidebar() {
                 disabled={reloadProject.isPending}
                 aria-label="Reload project"
               >
-                {reloadProject.isPending ? <CircularProgress size={18} /> : <RefreshIcon fontSize="small" />}
+                {reloadProject.isPending ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <RefreshIcon fontSize="small" />
+                )}
               </IconButton>
             </span>
           </Tooltip>

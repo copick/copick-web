@@ -25,5 +25,5 @@ def reload_project(project_id: str, registry: ProjectRegistry = Depends(get_regi
     try:
         registry.get_metadata(project_id)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found") from None
     registry.evict_service(project_id)

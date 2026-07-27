@@ -19,9 +19,9 @@ def get_copick_service(project_id: str = Path(...)) -> CopickService:
     try:
         return registry.get_service(project_id)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found") from None
     except RegistryError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 def get_project_meta(project_id: str = Path(...)) -> ProjectSummaryResponse:
@@ -35,4 +35,4 @@ def get_project_meta(project_id: str = Path(...)) -> ProjectSummaryResponse:
     try:
         return registry.get_metadata(project_id)
     except KeyError:
-        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+        raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found") from None

@@ -186,7 +186,7 @@ def create_picks(
             color=color,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.put("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", response_model=PicksDetailResponse)
@@ -230,7 +230,7 @@ def update_picks(
             ],
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", status_code=204)
@@ -248,7 +248,7 @@ def delete_picks(
     try:
         service.delete_picks_collection(run_name, object_name, user_id, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 # --- Segmentations endpoints ---

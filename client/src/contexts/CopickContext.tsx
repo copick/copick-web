@@ -213,7 +213,13 @@ interface CopickContextType {
 const CopickContext = createContext<CopickContextType | null>(null);
 
 // Provider component
-export function CopickProvider({ projectId, children }: { projectId: string; children: ReactNode }) {
+export function CopickProvider({
+  projectId,
+  children,
+}: {
+  projectId: string;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(copickReducer, initialState);
 
   const actions: CopickContextType = {
