@@ -54,7 +54,10 @@ export function PicksTable({ runName }: PicksTableProps) {
 
   const handleToggle = (pick: (typeof picks)[0]) => {
     const existing = state.selectedPicks.find(
-      (p) => p.objectName === pick.object_name && p.userId === pick.user_id && p.sessionId === pick.session_id
+      (p) =>
+        p.objectName === pick.object_name &&
+        p.userId === pick.user_id &&
+        p.sessionId === pick.session_id,
     );
 
     if (existing) {
@@ -70,7 +73,10 @@ export function PicksTable({ runName }: PicksTableProps) {
 
   const isVisible = (pick: (typeof picks)[0]) => {
     const existing = state.selectedPicks.find(
-      (p) => p.objectName === pick.object_name && p.userId === pick.user_id && p.sessionId === pick.session_id
+      (p) =>
+        p.objectName === pick.object_name &&
+        p.userId === pick.user_id &&
+        p.sessionId === pick.session_id,
     );
     return existing?.visible ?? false;
   };
@@ -84,7 +90,9 @@ export function PicksTable({ runName }: PicksTableProps) {
             <TableCell sx={{ py: 0.5, px: 1 }}>Object</TableCell>
             <TableCell sx={{ py: 0.5, px: 1 }}>User</TableCell>
             <TableCell sx={{ py: 0.5, px: 1 }}>Session</TableCell>
-            <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Count</TableCell>
+            <TableCell align="right" sx={{ py: 0.5, px: 1 }}>
+              Count
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -98,7 +106,11 @@ export function PicksTable({ runName }: PicksTableProps) {
             >
               <TableCell padding="checkbox" sx={{ py: 0.5 }}>
                 <IconButton size="small" onClick={() => handleToggle(pick)}>
-                  {isVisible(pick) ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+                  {isVisible(pick) ? (
+                    <Visibility fontSize="small" />
+                  ) : (
+                    <VisibilityOff fontSize="small" />
+                  )}
                 </IconButton>
               </TableCell>
               <TableCell sx={{ py: 0.5, px: 1, maxWidth: 100 }}>
@@ -112,7 +124,11 @@ export function PicksTable({ runName }: PicksTableProps) {
                       flexShrink: 0,
                     }}
                   />
-                  <Typography variant="body2" noWrap sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <Typography
+                    variant="body2"
+                    noWrap
+                    sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                  >
                     {pick.object_name}
                   </Typography>
                 </Box>

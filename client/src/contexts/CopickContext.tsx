@@ -2,7 +2,13 @@
  * Global state context for the copick-web application.
  */
 
-import { createContext, useContext, useReducer, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useReducer,
+  useMemo,
+  type ReactNode,
+} from "react";
 
 // Types for selected entities
 export interface PickSelection {
@@ -34,13 +40,35 @@ type CopickAction =
   | { type: "SELECT_RUN"; runName: string }
   | { type: "SELECT_TOMOGRAM"; voxelSize: number; tomoType: string }
   | { type: "CLEAR_SELECTION" }
-  | { type: "TOGGLE_PICK_VISIBILITY"; objectName: string; userId: string; sessionId: string }
+  | {
+      type: "TOGGLE_PICK_VISIBILITY";
+      objectName: string;
+      userId: string;
+      sessionId: string;
+    }
   | { type: "ADD_PICK"; pick: Omit<PickSelection, "visible"> }
-  | { type: "REMOVE_PICK"; objectName: string; userId: string; sessionId: string }
+  | {
+      type: "REMOVE_PICK";
+      objectName: string;
+      userId: string;
+      sessionId: string;
+    }
   | { type: "SET_PICKS"; picks: PickSelection[] }
-  | { type: "TOGGLE_SEGMENTATION_VISIBILITY"; name: string; userId: string; sessionId: string; voxelSize: number }
+  | {
+      type: "TOGGLE_SEGMENTATION_VISIBILITY";
+      name: string;
+      userId: string;
+      sessionId: string;
+      voxelSize: number;
+    }
   | { type: "ADD_SEGMENTATION"; seg: Omit<SegmentationSelection, "visible"> }
-  | { type: "REMOVE_SEGMENTATION"; name: string; userId: string; sessionId: string; voxelSize: number }
+  | {
+      type: "REMOVE_SEGMENTATION";
+      name: string;
+      userId: string;
+      sessionId: string;
+      voxelSize: number;
+    }
   | { type: "SET_SEGMENTATIONS"; segmentations: SegmentationSelection[] };
 
 // Initial state
@@ -75,16 +103,21 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
       return {
         ...state,
         selectedPicks: state.selectedPicks.map((p) =>
-          p.objectName === action.objectName && p.userId === action.userId && p.sessionId === action.sessionId
+          p.objectName === action.objectName &&
+          p.userId === action.userId &&
+          p.sessionId === action.sessionId
             ? { ...p, visible: !p.visible }
-            : p
+            : p,
         ),
       };
 
     case "ADD_PICK":
       return {
         ...state,
-        selectedPicks: [...state.selectedPicks, { ...action.pick, visible: true }],
+        selectedPicks: [
+          ...state.selectedPicks,
+          { ...action.pick, visible: true },
+        ],
       };
 
     case "REMOVE_PICK":
@@ -92,7 +125,11 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
         ...state,
         selectedPicks: state.selectedPicks.filter(
           (p) =>
-            !(p.objectName === action.objectName && p.userId === action.userId && p.sessionId === action.sessionId)
+            !(
+              p.objectName === action.objectName &&
+              p.userId === action.userId &&
+              p.sessionId === action.sessionId
+            ),
         ),
       };
 
@@ -111,14 +148,17 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
           s.sessionId === action.sessionId &&
           s.voxelSize === action.voxelSize
             ? { ...s, visible: !s.visible }
-            : s
+            : s,
         ),
       };
 
     case "ADD_SEGMENTATION":
       return {
         ...state,
-        selectedSegmentations: [...state.selectedSegmentations, { ...action.seg, visible: true }],
+        selectedSegmentations: [
+          ...state.selectedSegmentations,
+          { ...action.seg, visible: true },
+        ],
       };
 
     case "REMOVE_SEGMENTATION":
@@ -131,7 +171,7 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
               s.userId === action.userId &&
               s.sessionId === action.sessionId &&
               s.voxelSize === action.voxelSize
-            )
+            ),
         ),
       };
 
@@ -155,9 +195,18 @@ interface CopickContextType {
   selectRun: (runName: string) => void;
   selectTomogram: (voxelSize: number, tomoType: string) => void;
   clearSelection: () => void;
-  togglePickVisibility: (objectName: string, userId: string, sessionId: string) => void;
+  togglePickVisibility: (
+    objectName: string,
+    userId: string,
+    sessionId: string,
+  ) => void;
   addPick: (pick: Omit<PickSelection, "visible">) => void;
-  toggleSegmentationVisibility: (name: string, userId: string, sessionId: string, voxelSize: number) => void;
+  toggleSegmentationVisibility: (
+    name: string,
+    userId: string,
+    sessionId: string,
+    voxelSize: number,
+  ) => void;
   addSegmentation: (seg: Omit<SegmentationSelection, "visible">) => void;
 }
 
@@ -172,17 +221,31 @@ export function CopickProvider({ projectId, children }: { projectId: string; chi
     state,
     dispatch,
     selectRun: (runName) => dispatch({ type: "SELECT_RUN", runName }),
-    selectTomogram: (voxelSize, tomoType) => dispatch({ type: "SELECT_TOMOGRAM", voxelSize, tomoType }),
+    selectTomogram: (voxelSize, tomoType) =>
+      dispatch({ type: "SELECT_TOMOGRAM", voxelSize, tomoType }),
     clearSelection: () => dispatch({ type: "CLEAR_SELECTION" }),
     togglePickVisibility: (objectName, userId, sessionId) =>
-      dispatch({ type: "TOGGLE_PICK_VISIBILITY", objectName, userId, sessionId }),
+      dispatch({
+        type: "TOGGLE_PICK_VISIBILITY",
+        objectName,
+        userId,
+        sessionId,
+      }),
     addPick: (pick) => dispatch({ type: "ADD_PICK", pick }),
     toggleSegmentationVisibility: (name, userId, sessionId, voxelSize) =>
-      dispatch({ type: "TOGGLE_SEGMENTATION_VISIBILITY", name, userId, sessionId, voxelSize }),
+      dispatch({
+        type: "TOGGLE_SEGMENTATION_VISIBILITY",
+        name,
+        userId,
+        sessionId,
+        voxelSize,
+      }),
     addSegmentation: (seg) => dispatch({ type: "ADD_SEGMENTATION", seg }),
   };
 
-  return <CopickContext.Provider value={actions}>{children}</CopickContext.Provider>;
+  return (
+    <CopickContext.Provider value={actions}>{children}</CopickContext.Provider>
+  );
 }
 
 // Hook to use the context
@@ -216,6 +279,6 @@ export function useTomogramSelection() {
       selectedVoxelSize: state.selectedVoxelSize,
       selectedTomoType: state.selectedTomoType,
     }),
-    [state.selectedRunName, state.selectedVoxelSize, state.selectedTomoType]
+    [state.selectedRunName, state.selectedVoxelSize, state.selectedTomoType],
   );
 }

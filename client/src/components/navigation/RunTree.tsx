@@ -12,7 +12,13 @@ import {
   CircularProgress,
   Typography,
 } from "@mui/material";
-import { ExpandLess, ExpandMore, Folder, FolderOpen, Image } from "@mui/icons-material";
+import {
+  ExpandLess,
+  ExpandMore,
+  Folder,
+  FolderOpen,
+  Image,
+} from "@mui/icons-material";
 import { useRuns, useRun } from "@/api/hooks";
 import { useCopick, useProjectId } from "@/contexts/CopickContext";
 
@@ -75,9 +81,17 @@ function RunTreeNode({ runName }: RunTreeNodeProps) {
 
   return (
     <>
-      <ListItemButton onClick={handleClick} selected={isSelected && !state.selectedTomoType}>
-        <ListItemIcon sx={{ minWidth: 32 }}>{expanded ? <FolderOpen /> : <Folder />}</ListItemIcon>
-        <ListItemText primary={runName} primaryTypographyProps={{ noWrap: true }} />
+      <ListItemButton
+        onClick={handleClick}
+        selected={isSelected && !state.selectedTomoType}
+      >
+        <ListItemIcon sx={{ minWidth: 32 }}>
+          {expanded ? <FolderOpen /> : <Folder />}
+        </ListItemIcon>
+        <ListItemText
+          primary={runName}
+          primaryTypographyProps={{ noWrap: true }}
+        />
         {expanded ? <ExpandLess /> : <ExpandMore />}
       </ListItemButton>
       <Collapse in={expanded} timeout="auto" unmountOnExit>
@@ -110,7 +124,10 @@ function VoxelSpacingList({ runName }: VoxelSpacingListProps) {
     return (
       <List dense disablePadding sx={{ pl: 2 }}>
         <ListItemButton disabled>
-          <ListItemText primary="No voxel spacings" primaryTypographyProps={{ color: "text.secondary" }} />
+          <ListItemText
+            primary="No voxel spacings"
+            primaryTypographyProps={{ color: "text.secondary" }}
+          />
         </ListItemButton>
       </List>
     );
@@ -119,7 +136,11 @@ function VoxelSpacingList({ runName }: VoxelSpacingListProps) {
   return (
     <List dense disablePadding sx={{ pl: 2 }}>
       {run.voxel_spacings.map((vs) => (
-        <VoxelSpacingNode key={vs.voxel_size} runName={runName} voxelSpacing={vs} />
+        <VoxelSpacingNode
+          key={vs.voxel_size}
+          runName={runName}
+          voxelSpacing={vs}
+        />
       ))}
     </List>
   );
@@ -144,8 +165,15 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
   return (
     <>
       <ListItemButton onClick={() => setExpanded(!expanded)}>
-        <ListItemText primary={`${voxelSpacing.voxel_size.toFixed(2)} Å`} primaryTypographyProps={{ variant: "body2" }} />
-        {expanded ? <ExpandLess fontSize="small" /> : <ExpandMore fontSize="small" />}
+        <ListItemText
+          primary={`${voxelSpacing.voxel_size.toFixed(2)} Å`}
+          primaryTypographyProps={{ variant: "body2" }}
+        />
+        {expanded ? (
+          <ExpandLess fontSize="small" />
+        ) : (
+          <ExpandMore fontSize="small" />
+        )}
       </ListItemButton>
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <List dense disablePadding sx={{ pl: 2 }}>
@@ -156,11 +184,18 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
               state.selectedTomoType === tomo.tomo_type;
 
             return (
-              <ListItemButton key={tomo.tomo_type} onClick={() => handleTomogramClick(tomo.tomo_type)} selected={isSelected}>
+              <ListItemButton
+                key={tomo.tomo_type}
+                onClick={() => handleTomogramClick(tomo.tomo_type)}
+                selected={isSelected}
+              >
                 <ListItemIcon sx={{ minWidth: 28 }}>
                   <Image fontSize="small" />
                 </ListItemIcon>
-                <ListItemText primary={tomo.tomo_type} primaryTypographyProps={{ variant: "body2", noWrap: true }} />
+                <ListItemText
+                  primary={tomo.tomo_type}
+                  primaryTypographyProps={{ variant: "body2", noWrap: true }}
+                />
               </ListItemButton>
             );
           })}

@@ -26,7 +26,12 @@ import {
   Edit as EditIcon,
   Lock as LockIcon,
 } from "@mui/icons-material";
-import { usePicks, usePickPoints, useCreatePicks, useDeletePicks } from "@/api/hooks";
+import {
+  usePicks,
+  usePickPoints,
+  useCreatePicks,
+  useDeletePicks,
+} from "@/api/hooks";
 import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
 import { rgbaToHex } from "@/utils/colorUtils";
@@ -63,7 +68,11 @@ export function PicksPanel({ runName }: PicksPanelProps) {
     );
   }
 
-  const handleCreatePicks = async (objectName: string, userId: string, sessionId: string) => {
+  const handleCreatePicks = async (
+    objectName: string,
+    userId: string,
+    sessionId: string,
+  ) => {
     await createPicks.mutateAsync({
       projectId,
       runName,
@@ -72,7 +81,9 @@ export function PicksPanel({ runName }: PicksPanelProps) {
   };
 
   const handleDeletePicks = async (pick: PicksSummaryResponse) => {
-    if (window.confirm(`Delete picks for ${pick.object_name} by ${pick.user_id}?`)) {
+    if (
+      window.confirm(`Delete picks for ${pick.object_name} by ${pick.user_id}?`)
+    ) {
       await deletePicks.mutateAsync({
         projectId,
         runName,
@@ -85,7 +96,10 @@ export function PicksPanel({ runName }: PicksPanelProps) {
 
   const handleToggle = (pick: PicksSummaryResponse) => {
     const existing = state.selectedPicks.find(
-      (p) => p.objectName === pick.object_name && p.userId === pick.user_id && p.sessionId === pick.session_id
+      (p) =>
+        p.objectName === pick.object_name &&
+        p.userId === pick.user_id &&
+        p.sessionId === pick.session_id,
     );
 
     if (existing) {
@@ -101,7 +115,10 @@ export function PicksPanel({ runName }: PicksPanelProps) {
 
   const isVisible = (pick: PicksSummaryResponse) => {
     const existing = state.selectedPicks.find(
-      (p) => p.objectName === pick.object_name && p.userId === pick.user_id && p.sessionId === pick.session_id
+      (p) =>
+        p.objectName === pick.object_name &&
+        p.userId === pick.user_id &&
+        p.sessionId === pick.session_id,
     );
     return existing?.visible ?? false;
   };
@@ -116,8 +133,21 @@ export function PicksPanel({ runName }: PicksPanelProps) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Toolbar */}
-      <Box sx={{ p: 1, display: "flex", gap: 1, borderBottom: 1, borderColor: "divider" }}>
-        <Button startIcon={<AddIcon />} size="small" onClick={() => setDialogOpen(true)} disabled={isEditing}>
+      <Box
+        sx={{
+          p: 1,
+          display: "flex",
+          gap: 1,
+          borderBottom: 1,
+          borderColor: "divider",
+        }}
+      >
+        <Button
+          startIcon={<AddIcon />}
+          size="small"
+          onClick={() => setDialogOpen(true)}
+          disabled={isEditing}
+        >
           New
         </Button>
       </Box>
@@ -164,7 +194,12 @@ export function PicksPanel({ runName }: PicksPanelProps) {
       )}
 
       {/* New Pick Dialog */}
-      <NewPickDialog open={dialogOpen} onClose={() => setDialogOpen(false)} onSubmit={handleCreatePicks} runName={runName} />
+      <NewPickDialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={handleCreatePicks}
+        runName={runName}
+      />
     </Box>
   );
 }
@@ -193,7 +228,13 @@ function PickRow({
 }: PickRowProps) {
   const projectId = useProjectId();
   const { startEditing } = usePicking();
-  const { data: pickDetail } = usePickPoints(projectId, runName, pick.object_name, pick.user_id, pick.session_id);
+  const { data: pickDetail } = usePickPoints(
+    projectId,
+    runName,
+    pick.object_name,
+    pick.user_id,
+    pick.session_id,
+  );
 
   const handleEdit = () => {
     if (!pickDetail) return;
@@ -216,7 +257,7 @@ function PickRow({
         sessionId: pick.session_id,
         color: pick.color,
       },
-      points
+      points,
     );
   };
 
@@ -224,12 +265,18 @@ function PickRow({
     <TableRow
       hover
       sx={{
-        backgroundColor: isCurrentlyEditing ? `${rgbaToHex(pick.color)}40` : `${rgbaToHex(pick.color)}20`,
+        backgroundColor: isCurrentlyEditing
+          ? `${rgbaToHex(pick.color)}40`
+          : `${rgbaToHex(pick.color)}20`,
       }}
     >
       <TableCell padding="checkbox" sx={{ py: 0.5 }}>
         <IconButton size="small" onClick={onToggle}>
-          {isVisible ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+          {isVisible ? (
+            <Visibility fontSize="small" />
+          ) : (
+            <VisibilityOff fontSize="small" />
+          )}
         </IconButton>
       </TableCell>
       <TableCell sx={{ py: 0.5, px: 1, maxWidth: 100 }}>
@@ -243,7 +290,11 @@ function PickRow({
               flexShrink: 0,
             }}
           />
-          <Typography variant="body2" noWrap sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          <Typography
+            variant="body2"
+            noWrap
+            sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+          >
             {pick.object_name}
           </Typography>
         </Box>
@@ -272,7 +323,11 @@ function PickRow({
         <Box sx={{ display: "flex" }}>
           {!isToolPick && (
             <>
-              <Tooltip title={isAnyEditing ? "Finish current edit first" : "Edit picks"}>
+              <Tooltip
+                title={
+                  isAnyEditing ? "Finish current edit first" : "Edit picks"
+                }
+              >
                 <span>
                   <IconButton
                     size="small"
@@ -286,7 +341,12 @@ function PickRow({
               </Tooltip>
               <Tooltip title="Delete picks">
                 <span>
-                  <IconButton size="small" onClick={onDelete} disabled={isAnyEditing} color="error">
+                  <IconButton
+                    size="small"
+                    onClick={onDelete}
+                    disabled={isAnyEditing}
+                    color="error"
+                  >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
                 </span>

@@ -72,7 +72,7 @@ export function usePickPoints(
   runName: string | null,
   objectName: string | null,
   userId: string | null,
-  sessionId: string | null
+  sessionId: string | null,
 ) {
   return useQuery({
     queryKey: ["pickPoints", projectId, runName, objectName, userId, sessionId],

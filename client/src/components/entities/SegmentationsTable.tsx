@@ -55,11 +55,19 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
   const handleToggle = (seg: (typeof segmentations)[0]) => {
     const existing = state.selectedSegmentations.find(
       (s) =>
-        s.name === seg.name && s.userId === seg.user_id && s.sessionId === seg.session_id && s.voxelSize === seg.voxel_size
+        s.name === seg.name &&
+        s.userId === seg.user_id &&
+        s.sessionId === seg.session_id &&
+        s.voxelSize === seg.voxel_size,
     );
 
     if (existing) {
-      toggleSegmentationVisibility(seg.name, seg.user_id, seg.session_id, seg.voxel_size);
+      toggleSegmentationVisibility(
+        seg.name,
+        seg.user_id,
+        seg.session_id,
+        seg.voxel_size,
+      );
     } else {
       addSegmentation({
         name: seg.name,
@@ -73,7 +81,10 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
   const isVisible = (seg: (typeof segmentations)[0]) => {
     const existing = state.selectedSegmentations.find(
       (s) =>
-        s.name === seg.name && s.userId === seg.user_id && s.sessionId === seg.session_id && s.voxelSize === seg.voxel_size
+        s.name === seg.name &&
+        s.userId === seg.user_id &&
+        s.sessionId === seg.session_id &&
+        s.voxelSize === seg.voxel_size,
     );
     return existing?.visible ?? false;
   };
@@ -87,7 +98,9 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
             <TableCell sx={{ py: 0.5, px: 1 }}>Name</TableCell>
             <TableCell sx={{ py: 0.5, px: 1 }}>User</TableCell>
             <TableCell sx={{ py: 0.5, px: 1 }}>Session</TableCell>
-            <TableCell align="right" sx={{ py: 0.5, px: 1 }}>Voxel Size</TableCell>
+            <TableCell align="right" sx={{ py: 0.5, px: 1 }}>
+              Voxel Size
+            </TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
@@ -103,7 +116,11 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
               >
                 <TableCell padding="checkbox" sx={{ py: 0.5 }}>
                   <IconButton size="small" onClick={() => handleToggle(seg)}>
-                    {isVisible(seg) ? <Visibility fontSize="small" /> : <VisibilityOff fontSize="small" />}
+                    {isVisible(seg) ? (
+                      <Visibility fontSize="small" />
+                    ) : (
+                      <VisibilityOff fontSize="small" />
+                    )}
                   </IconButton>
                 </TableCell>
                 <TableCell sx={{ py: 0.5, px: 1, maxWidth: 100 }}>
@@ -115,11 +132,17 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
                         borderRadius: "50%",
                         background: seg.is_multilabel
                           ? "conic-gradient(red, orange, yellow, green, blue, violet, red)"
-                          : rgbaToHex(color as [number, number, number, number]),
+                          : rgbaToHex(
+                              color as [number, number, number, number],
+                            ),
                         flexShrink: 0,
                       }}
                     />
-                    <Typography variant="body2" noWrap sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <Typography
+                      variant="body2"
+                      noWrap
+                      sx={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
                       {seg.name}
                     </Typography>
                   </Box>
@@ -135,7 +158,9 @@ export function SegmentationsTable({ runName }: SegmentationsTableProps) {
                   </Typography>
                 </TableCell>
                 <TableCell align="right" sx={{ py: 0.5, px: 1 }}>
-                  <Typography variant="body2">{seg.voxel_size.toFixed(2)}</Typography>
+                  <Typography variant="body2">
+                    {seg.voxel_size.toFixed(2)}
+                  </Typography>
                 </TableCell>
               </TableRow>
             );

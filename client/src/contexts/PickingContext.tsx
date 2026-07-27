@@ -2,7 +2,13 @@
  * Context for managing picking tool state and operations.
  */
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useReducer,
+  useCallback,
+  type ReactNode,
+} from "react";
 
 export type PickingTool = "view" | "add" | "select" | "delete";
 
@@ -51,7 +57,10 @@ const initialState: PickingState = {
   hasUnsavedChanges: false,
 };
 
-function pickingReducer(state: PickingState, action: PickingAction): PickingState {
+function pickingReducer(
+  state: PickingState,
+  action: PickingAction,
+): PickingState {
   switch (action.type) {
     case "SET_TOOL":
       return { ...state, activeTool: action.tool };
@@ -87,7 +96,9 @@ function pickingReducer(state: PickingState, action: PickingAction): PickingStat
       return {
         ...state,
         localPoints: state.localPoints.filter((p) => p.id !== action.pointId),
-        selectedPointIds: new Set([...state.selectedPointIds].filter((id) => id !== action.pointId)),
+        selectedPointIds: new Set(
+          [...state.selectedPointIds].filter((id) => id !== action.pointId),
+        ),
         hasUnsavedChanges: true,
       };
     }
@@ -103,7 +114,9 @@ function pickingReducer(state: PickingState, action: PickingAction): PickingStat
     }
 
     case "SELECT_POINT": {
-      const newSelection = new Set(action.addToSelection ? state.selectedPointIds : []);
+      const newSelection = new Set(
+        action.addToSelection ? state.selectedPointIds : [],
+      );
       if (newSelection.has(action.pointId)) {
         newSelection.delete(action.pointId);
       } else {
@@ -150,21 +163,39 @@ export function PickingProvider({ children }: { children: ReactNode }) {
     state,
     dispatch,
     setTool: useCallback((tool) => dispatch({ type: "SET_TOOL", tool }), []),
-    startEditing: useCallback((picks, points) => dispatch({ type: "START_EDITING", picks, points }), []),
-    stopEditing: useCallback(() => dispatch({ type: "STOP_EDITING" }), []),
-    addPoint: useCallback((point) => dispatch({ type: "ADD_POINT", point }), []),
-    deletePoint: useCallback((pointId) => dispatch({ type: "DELETE_POINT", pointId }), []),
-    deleteSelectedPoints: useCallback(() => dispatch({ type: "DELETE_SELECTED_POINTS" }), []),
-    selectPoint: useCallback(
-      (pointId, addToSelection = false) => dispatch({ type: "SELECT_POINT", pointId, addToSelection }),
-      []
+    startEditing: useCallback(
+      (picks, points) => dispatch({ type: "START_EDITING", picks, points }),
+      [],
     ),
-    clearSelection: useCallback(() => dispatch({ type: "CLEAR_SELECTION" }), []),
+    stopEditing: useCallback(() => dispatch({ type: "STOP_EDITING" }), []),
+    addPoint: useCallback(
+      (point) => dispatch({ type: "ADD_POINT", point }),
+      [],
+    ),
+    deletePoint: useCallback(
+      (pointId) => dispatch({ type: "DELETE_POINT", pointId }),
+      [],
+    ),
+    deleteSelectedPoints: useCallback(
+      () => dispatch({ type: "DELETE_SELECTED_POINTS" }),
+      [],
+    ),
+    selectPoint: useCallback(
+      (pointId, addToSelection = false) =>
+        dispatch({ type: "SELECT_POINT", pointId, addToSelection }),
+      [],
+    ),
+    clearSelection: useCallback(
+      () => dispatch({ type: "CLEAR_SELECTION" }),
+      [],
+    ),
     markSaved: useCallback(() => dispatch({ type: "MARK_SAVED" }), []),
     isEditing: state.editingPicks !== null,
   };
 
-  return <PickingContext.Provider value={value}>{children}</PickingContext.Provider>;
+  return (
+    <PickingContext.Provider value={value}>{children}</PickingContext.Provider>
+  );
 }
 
 export function usePicking(): PickingContextType {

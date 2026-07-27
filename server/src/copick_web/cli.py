@@ -73,6 +73,7 @@ def main(
         click.echo(f"Registry URL: {registry_url}")
 
     if not no_browser:
+
         def open_browser():
             webbrowser.open(url)
 

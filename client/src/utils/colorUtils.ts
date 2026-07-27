@@ -13,7 +13,10 @@ export function rgbaToHex(color: [number, number, number, number]): string {
 /**
  * Convert RGBA tuple to CSS rgba() string.
  */
-export function rgbaToCss(color: [number, number, number, number], alphaOverride?: number): string {
+export function rgbaToCss(
+  color: [number, number, number, number],
+  alphaOverride?: number,
+): string {
   const [r, g, b, a] = color;
   const alpha = alphaOverride ?? a / 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;

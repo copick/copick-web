@@ -10,7 +10,14 @@ const SIDEBAR_WIDTH = 320;
 
 export function AppLayout() {
   return (
-    <Box sx={{ display: "flex", height: "100vh", width: "100vw", overflow: "hidden" }}>
+    <Box
+      sx={{
+        display: "flex",
+        height: "100vh",
+        width: "100vw",
+        overflow: "hidden",
+      }}
+    >
       <Box
         component="aside"
         sx={{
@@ -25,7 +32,10 @@ export function AppLayout() {
       >
         <Sidebar />
       </Box>
-      <Box component="main" sx={{ flexGrow: 1, overflow: "hidden", position: "relative" }}>
+      <Box
+        component="main"
+        sx={{ flexGrow: 1, overflow: "hidden", position: "relative" }}
+      >
         <MainContent />
       </Box>
     </Box>

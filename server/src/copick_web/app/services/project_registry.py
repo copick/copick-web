@@ -24,7 +24,6 @@ The registry list itself is refreshed on a background timer; refresh
 failures keep the previous snapshot rather than emptying the cache.
 """
 
-import asyncio
 import json
 import logging
 import threading

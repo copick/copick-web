@@ -89,7 +89,7 @@ We offer dev containers for ease of use or manual dev setups.
 
 ### Docker/Podman Compose
 Pre-requisites: Podman (recommended) or Docker installed with Compose extension. Check if installed with `docker-compose version` or `podman compose version`
-- create .env file using .env.example as template. 
+- create .env file using .env.example as template.
 - obtain or use a copick project. Modify config.json's `overlay_root` parameter to `local:/data/copick_data/`
 ```
 # Example .env
