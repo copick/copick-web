@@ -136,6 +136,22 @@ podman compose up --build -d
 podman compose down
 ```
 
+#### Joining Embrella's external network (optional)
+
+By default the stack is self-contained on its own `copick-net` bridge. If you
+run another compose stack (e.g. `embrella`) that needs to reach this one by
+hostname, layer on `compose-embrella.yml`:
+
+```bash
+podman compose -f compose-dev.yml -f compose-embrella.yml up
+```
+
+On hosts that always want it, set `COMPOSE_FILE` in `.env` instead of passing `-f` each time:
+
+```
+COMPOSE_FILE=compose-prod.yml:compose-embrella.yml
+```
+
 ### Manual
 If you do not wish to run on Docker, these are the manual steps. Please see prerequisites section.
 

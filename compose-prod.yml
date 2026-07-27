@@ -40,7 +40,7 @@ services:
       - server
     restart: unless-stopped
     networks:
-      - copick-net
+      copick-net:
 
 networks:
   copick-net:

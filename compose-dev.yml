@@ -45,7 +45,7 @@ services:
     depends_on:
       - server
     networks:
-      - copick-net
+      copick-net:
 
 networks:
   copick-net:
