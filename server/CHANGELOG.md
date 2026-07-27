@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/copick/copick-web/compare/server-v0.1.1...server-v0.1.2) (2026-07-24)
+
+
+### Features
+
+* containerize app ([#4](https://github.com/copick/copick-web/issues/4)) ([1b57cb4](https://github.com/copick/copick-web/commit/1b57cb40e51ce6553f47ea896802725e31e850bc))
+
 ## [0.1.1](https://github.com/copick/copick-web/compare/server-v0.1.0...server-v0.1.1) (2026-02-25)
 
 
