@@ -1,7 +1,13 @@
-import { LabelLayer, OmeZarrImageSource, SliceCoordinates } from "@idetik/core";
+import {
+  LabelLayer,
+  OmeZarrImageSource,
+  SliceCoordinates,
+  type SliceOrientation,
+} from "@idetik/core";
 import { useEffect, useRef } from "react";
 import { Idetik } from "../Idetik";
 import { imageSourcePolicy } from "../policy";
+import { planeAxes } from "../orientation";
 
 type Rgba = [number, number, number, number];
 
@@ -9,51 +15,72 @@ interface SegmentationLayerProps {
   viewer: Idetik;
   sourceUrl: string;
   lookupTable: Map<number, Rgba>;
-  worldZ: number;
+  orientation: SliceOrientation;
+  slicePosition: number;
 }
 
 export function SegmentationLayer({
   viewer,
   sourceUrl,
   lookupTable,
-  worldZ,
+  orientation,
+  slicePosition,
 }: SegmentationLayerProps) {
+  const layerRef = useRef<LabelLayer | null>(null);
   const sliceCoordsRef = useRef<SliceCoordinates>({});
   const lookupTableRef = useRef(lookupTable);
-  const worldZRef = useRef(worldZ);
+  const orientationRef = useRef(orientation);
+  const slicePositionRef = useRef(slicePosition);
 
   lookupTableRef.current = lookupTable;
-  worldZRef.current = worldZ;
+  orientationRef.current = orientation;
+  slicePositionRef.current = slicePosition;
 
   useEffect(() => {
     let cancelled = false;
-    let layer: LabelLayer | null = null;
 
     (async () => {
       const source = await OmeZarrImageSource.fromHttp({ url: sourceUrl });
       if (cancelled) return;
 
-      sliceCoordsRef.current.z = worldZRef.current;
-      layer = new LabelLayer({
+      const axes = planeAxes(orientationRef.current);
+      const sliceCoords: SliceCoordinates = {};
+      sliceCoords[axes.w] = slicePositionRef.current;
+      sliceCoordsRef.current = sliceCoords;
+      const layer = new LabelLayer({
         source,
-        sliceCoords: sliceCoordsRef.current,
+        sliceCoords,
         colorMap: { lookupTable: lookupTableRef.current },
         blendMode: "normal",
         policy: imageSourcePolicy,
+        orientation: orientationRef.current,
       });
       viewer.addLayer(layer);
+      layerRef.current = layer;
     })();
 
     return () => {
       cancelled = true;
-      if (layer) viewer.removeLayer(layer);
+      if (layerRef.current) viewer.removeLayer(layerRef.current);
+      layerRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, sourceUrl]);
 
   useEffect(() => {
-    sliceCoordsRef.current.z = worldZ;
-  }, [worldZ]);
+    const layer = layerRef.current;
+    if (!layer || layer.orientation === orientation) return;
+
+    // replace with layer.setSliceCoords() when it becomes available upstream
+    const sliceCoords = sliceCoordsRef.current;
+    for (const axis of ["x", "y", "z"] as const) delete sliceCoords[axis];
+    sliceCoords[planeAxes(orientation).w] = slicePositionRef.current;
+
+    layer.setOrientation(orientation);
+  }, [orientation]);
+
+  useEffect(() => {
+    sliceCoordsRef.current[planeAxes(orientation).w] = slicePosition;
+  }, [slicePosition, orientation]);
 
   return null;
 }

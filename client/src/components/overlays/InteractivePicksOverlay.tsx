@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { SliceOrientation } from "@idetik/core";
 import { Idetik } from "@/idetik/Idetik";
 import { PointsLayer } from "@/idetik/components/PointsLayer";
 import { useCopick, useProjectId } from "@/contexts/CopickContext";
@@ -12,19 +13,21 @@ type Rgba = [number, number, number, number];
 
 interface InteractivePicksOverlayProps {
   viewer: Idetik | null;
-  currentZIndex: number;
+  orientation: SliceOrientation;
+  sliceIndex: number;
   voxelSpacing: number;
 }
 
 export function InteractivePicksOverlay({
   viewer,
-  currentZIndex,
+  orientation,
+  sliceIndex,
   voxelSpacing,
 }: InteractivePicksOverlayProps) {
   const { state: copickState } = useCopick();
   const { state: pickingState, isEditing } = usePicking();
 
-  const worldZ = currentZIndex * voxelSpacing;
+  const slicePosition = sliceIndex * voxelSpacing;
   const visiblePicks = copickState.selectedPicks.filter((p) => p.visible);
 
   if (!viewer) {
@@ -48,7 +51,8 @@ export function InteractivePicksOverlay({
             objectName={pick.objectName}
             userId={pick.userId}
             sessionId={pick.sessionId}
-            worldZ={worldZ}
+            orientation={orientation}
+            slicePosition={slicePosition}
           />
         ))}
 
@@ -58,7 +62,8 @@ export function InteractivePicksOverlay({
           points={pickingState.localPoints}
           selectedIds={pickingState.selectedPointIds}
           color={pickingState.editingPicks.color}
-          worldZ={worldZ}
+          orientation={orientation}
+          slicePosition={slicePosition}
         />
       )}
     </>
@@ -70,13 +75,15 @@ function ReadOnlyPicks({
   objectName,
   userId,
   sessionId,
-  worldZ,
+  orientation,
+  slicePosition,
 }: {
   viewer: Idetik;
   objectName: string;
   userId: string;
   sessionId: string;
-  worldZ: number;
+  orientation: SliceOrientation;
+  slicePosition: number;
 }) {
   const { state } = useCopick();
   const projectId = useProjectId();
@@ -93,7 +100,8 @@ function ReadOnlyPicks({
       points={picks?.points}
       color={picks?.color}
       pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
-      worldZ={worldZ}
+      orientation={orientation}
+      slicePosition={slicePosition}
     />
   );
 }
@@ -103,13 +111,15 @@ function EditablePicks({
   points,
   selectedIds,
   color,
-  worldZ,
+  orientation,
+  slicePosition,
 }: {
   viewer: Idetik;
   points: PickingPoint[];
   selectedIds: Set<string>;
   color: Rgba;
-  worldZ: number;
+  orientation: SliceOrientation;
+  slicePosition: number;
 }) {
   const normalPoints = useMemo(
     () => points.filter((p) => !selectedIds.has(p.id)),
@@ -136,14 +146,16 @@ function EditablePicks({
         points={normalPoints}
         color={color}
         pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
-        worldZ={worldZ}
+        orientation={orientation}
+        slicePosition={slicePosition}
       />
       <PointsLayer
         viewer={viewer}
         points={selectedPoints}
         color={highlightColor}
         pointSizePixels={SELECTED_POINT_SIZE_PIXELS}
-        worldZ={worldZ}
+        orientation={orientation}
+        slicePosition={slicePosition}
       />
     </>
   );

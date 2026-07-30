@@ -4,7 +4,8 @@ import { useIdetik } from "@/idetik/useIdetik";
 import { Canvas } from "@/idetik/components/Canvas";
 import { ImageLayer } from "@/idetik/components/ImageLayer";
 import { ScaleBar } from "@/idetik/components/ScaleBar";
-import { ViewerProvider } from "@/contexts/ViewerContext";
+import { toSliceOrientation } from "@/idetik/orientation";
+import { ViewerProvider, useViewer } from "@/contexts/ViewerContext";
 import { useCopick } from "@/contexts/CopickContext";
 import { ViewerControls } from "./ViewerControls";
 import { ChannelControls } from "./ChannelControls";
@@ -15,11 +16,23 @@ import { PickingToolbar } from "@/components/picking/PickingToolbar";
 import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 
 export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
-  const { viewer, canvasRefCallback } = useIdetik();
+  return (
+    <ViewerProvider>
+      <TomogramViewerContent zarrUrl={zarrUrl} />
+    </ViewerProvider>
+  );
+}
+
+function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
+  const { state: viewerState } = useViewer();
+  const orientation = toSliceOrientation(viewerState.axis);
+  const { viewer, canvasRefCallback } = useIdetik(orientation);
   const { state: copickState } = useCopick();
   const voxelSpacing = copickState.selectedVoxelSize ?? 1;
-  const [zIndex, setZIndex] = useState(0);
-  const [maxZ, setMaxZ] = useState<number | undefined>(undefined);
+  const [sliceIndex, setSliceIndex] = useState(0);
+  const [maxSliceIndex, setMaxSliceIndex] = useState<number | undefined>(
+    undefined,
+  );
 
   const [color, setColor] = useState("#ffffff");
   const [contrastLimits, setContrastLimits] = useState<
@@ -30,10 +43,10 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
   >(undefined);
   const autoLimitsRef = useRef<[number, number] | null>(null);
 
-  const handleZMaxIndex = useCallback((max: number | undefined) => {
-    setMaxZ(max);
+  const handleMaxSliceIndex = useCallback((max: number | undefined) => {
+    setMaxSliceIndex(max);
     if (max !== undefined) {
-      setZIndex(Math.floor(max / 2));
+      setSliceIndex(Math.floor(max / 2));
     }
   }, []);
 
@@ -50,69 +63,70 @@ export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
   }, []);
 
   return (
-    <ViewerProvider>
-      <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        <PickingToolbar />
-        <ViewerControls
-          currentZIndex={zIndex}
-          maxZIndex={maxZ}
-          onZIndexChange={setZIndex}
+    <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <PickingToolbar />
+      <ViewerControls
+        sliceIndex={sliceIndex}
+        maxSliceIndex={maxSliceIndex}
+        onSliceIndexChange={setSliceIndex}
+      />
+      <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
+        <Canvas canvasRefCallback={canvasRefCallback} />
+        <ImageLayer
+          viewer={viewer}
+          sourceUrl={`${window.location.origin}${zarrUrl}`}
+          orientation={orientation}
+          sliceIndex={sliceIndex}
+          color={color}
+          contrastLimits={contrastLimits}
+          onMaxSliceIndex={handleMaxSliceIndex}
+          onAutoContrast={handleAutoContrast}
         />
-        <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
-          <Canvas canvasRefCallback={canvasRefCallback} />
-          <ImageLayer
-            viewer={viewer}
-            sourceUrl={`${window.location.origin}${zarrUrl}`}
-            zIndex={zIndex}
-            color={color}
-            contrastLimits={contrastLimits}
-            onZMaxIndex={handleZMaxIndex}
-            onAutoContrast={handleAutoContrast}
-          />
-          <SegmentationOverlay
-            viewer={viewer}
-            currentZIndex={zIndex}
-            voxelSpacing={voxelSpacing}
-          />
-          <InteractivePicksOverlay
-            viewer={viewer}
-            currentZIndex={zIndex}
-            voxelSpacing={voxelSpacing}
-          />
-          <PickingEventHandler
-            viewer={viewer}
-            currentZIndex={zIndex}
-            onZIndexChange={setZIndex}
-            maxZIndex={maxZ}
-            voxelSpacing={voxelSpacing}
-          />
-          {contrastLimits && contrastRange && (
-            <Box sx={{ position: "absolute", bottom: 0, right: 0, m: 1 }}>
-              <ChannelControls
-                color={color}
-                contrastLimits={contrastLimits}
-                contrastRange={contrastRange}
-                onColorChange={setColor}
-                onContrastChange={setContrastLimits}
-                onResetContrast={handleResetContrast}
-              />
-            </Box>
-          )}
-          <Box
-            sx={{
-              position: "absolute",
-              bottom: 0,
-              left: 0,
-              width: "20%",
-              m: 2,
-              userSelect: "none",
-              pointerEvents: "none",
-            }}
-          >
-            <ScaleBar viewer={viewer} unit="angstrom" align="start" />
+        <SegmentationOverlay
+          viewer={viewer}
+          orientation={orientation}
+          sliceIndex={sliceIndex}
+          voxelSpacing={voxelSpacing}
+        />
+        <InteractivePicksOverlay
+          viewer={viewer}
+          orientation={orientation}
+          sliceIndex={sliceIndex}
+          voxelSpacing={voxelSpacing}
+        />
+        <PickingEventHandler
+          viewer={viewer}
+          sliceIndex={sliceIndex}
+          onSliceIndexChange={setSliceIndex}
+          maxSliceIndex={maxSliceIndex}
+          voxelSpacing={voxelSpacing}
+        />
+        {contrastLimits && contrastRange && (
+          <Box sx={{ position: "absolute", bottom: 0, right: 0, m: 1 }}>
+            <ChannelControls
+              color={color}
+              contrastLimits={contrastLimits}
+              contrastRange={contrastRange}
+              onColorChange={setColor}
+              onContrastChange={setContrastLimits}
+              onResetContrast={handleResetContrast}
+            />
           </Box>
+        )}
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            width: "20%",
+            m: 2,
+            userSelect: "none",
+            pointerEvents: "none",
+          }}
+        >
+          <ScaleBar viewer={viewer} unit="angstrom" align="start" />
         </Box>
       </Box>
-    </ViewerProvider>
+    </Box>
   );
 }
