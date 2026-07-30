@@ -1,3 +1,4 @@
+import type { SliceOrientation } from "@idetik/core";
 import { Idetik } from "@/idetik/Idetik";
 import { SegmentationLayer } from "@/idetik/components/SegmentationLayer";
 import { useCopick } from "@/contexts/CopickContext";
@@ -11,20 +12,22 @@ function toLabelColor([r, g, b, a]: Rgba): Rgba {
 
 interface SegmentationOverlayProps {
   viewer: Idetik | null;
-  currentZIndex: number;
+  orientation: SliceOrientation;
+  sliceIndex: number;
   voxelSpacing: number;
 }
 
 export function SegmentationOverlay({
   viewer,
-  currentZIndex,
+  orientation,
+  sliceIndex,
   voxelSpacing,
 }: SegmentationOverlayProps) {
   const { state: copickState } = useCopick();
   const { data: segmentations } = useSegmentations(copickState.selectedRunName);
   const { data: objects } = useObjects();
 
-  const worldZ = currentZIndex * voxelSpacing;
+  const slicePosition = sliceIndex * voxelSpacing;
   const visibleSegmentations = copickState.selectedSegmentations.filter(
     (s) => s.visible,
   );
@@ -71,7 +74,8 @@ export function SegmentationOverlay({
             viewer={viewer}
             sourceUrl={`${window.location.origin}${segData.zarr_url}`}
             lookupTable={lookupTable}
-            worldZ={worldZ}
+            orientation={orientation}
+            slicePosition={slicePosition}
           />
         );
       })}

@@ -3,10 +3,12 @@ import {
   ImageLayer as CoreImageLayer,
   OmeZarrImageSource,
   SliceCoordinates,
+  type SliceOrientation,
 } from "@idetik/core";
 import { useEffect, useRef } from "react";
 import { Idetik } from "../Idetik";
 import { imageSourcePolicy } from "../policy";
+import { planeAxes } from "../orientation";
 import { calculateContrast, type Contrast } from "../contrastStats";
 
 type DimensionLod = { size: number; scale: number; translation: number };
@@ -16,10 +18,11 @@ const DEFAULT_CONTRAST_LIMITS: [number, number] = [-3, 3];
 interface ImageLayerProps {
   viewer: Idetik | null;
   sourceUrl: string;
-  zIndex: number;
+  orientation: SliceOrientation;
+  sliceIndex: number;
   color: string;
   contrastLimits: [number, number] | undefined;
-  onZMaxIndex?: (maxIndex: number | undefined) => void;
+  onMaxSliceIndex?: (maxIndex: number | undefined) => void;
   onAutoContrast?: (contrast: Contrast) => void;
 }
 
@@ -30,19 +33,24 @@ function indexToWorld(index: number, lod: DimensionLod): number {
 export function ImageLayer({
   viewer,
   sourceUrl,
-  zIndex,
+  orientation,
+  sliceIndex,
   color,
   contrastLimits,
-  onZMaxIndex,
+  onMaxSliceIndex,
   onAutoContrast,
 }: ImageLayerProps) {
   const layerRef = useRef<CoreImageLayer | null>(null);
-  const zLodRef = useRef<DimensionLod | null>(null);
-  const zIndexRef = useRef(zIndex);
+  const sourceRef = useRef<OmeZarrImageSource | null>(null);
+  const sliceLodRef = useRef<DimensionLod | null>(null);
+  const sliceIndexRef = useRef(sliceIndex);
+  const orientationRef = useRef(orientation);
   const sliceCoordsRef = useRef<SliceCoordinates>({});
   const channelRef = useRef({ color, contrastLimits });
+  const contrastUrlRef = useRef<string | null>(null);
 
-  zIndexRef.current = zIndex;
+  sliceIndexRef.current = sliceIndex;
+  orientationRef.current = orientation;
   channelRef.current = { color, contrastLimits };
 
   useEffect(() => {
@@ -54,20 +62,25 @@ export function ImageLayer({
     (async () => {
       const source = await OmeZarrImageSource.fromHttp({ url: sourceUrl });
       if (cancelled) return;
+      sourceRef.current = source;
 
+      const axes = planeAxes(orientationRef.current);
       const dims = source.getDimensions();
-      const zLod = dims.z?.lods[0] ?? null;
-      zLodRef.current = zLod;
+      const sliceLod = dims[axes.w]?.lods[0] ?? null;
+      sliceLodRef.current = sliceLod;
 
-      if (zLod) {
-        sliceCoordsRef.current.z = indexToWorld(zIndexRef.current, zLod);
+      const sliceCoords: SliceCoordinates = {};
+      if (sliceLod) {
+        sliceCoords[axes.w] = indexToWorld(sliceIndexRef.current, sliceLod);
       }
+      sliceCoordsRef.current = sliceCoords;
 
       const initial = channelRef.current;
       const layer = new CoreImageLayer({
         source,
-        sliceCoords: sliceCoordsRef.current,
+        sliceCoords,
         policy: imageSourcePolicy,
+        orientation: orientationRef.current,
       });
       layer.setChannelProps([
         {
@@ -79,15 +92,22 @@ export function ImageLayer({
       viewer.addLayer(layer);
       layerRef.current = layer;
 
-      const xLod = dims.x.lods[0];
-      const yLod = dims.y.lods[0];
-      viewer.frameTo([0, xLod.size * xLod.scale], [0, yLod.size * yLod.scale]);
+      const uLod = dims[axes.u]?.lods[0];
+      const vLod = dims[axes.v]?.lods[0];
+      if (uLod && vLod) {
+        viewer.frameTo([0, uLod.size * uLod.scale], [0, vLod.size * vLod.scale]);
+      }
 
-      onZMaxIndex?.(zLod ? zLod.size - 1 : undefined);
+      onMaxSliceIndex?.(sliceLod ? sliceLod.size - 1 : undefined);
 
-      const contrast = await calculateContrast(source, abortController.signal);
-      if (!cancelled && contrast) {
-        onAutoContrast?.(contrast);
+      // only compute auto-contrast once per source, so switching the slice
+      // orientation doesn't clobber user-adjusted contrast settings.
+      if (contrastUrlRef.current !== sourceUrl) {
+        const contrast = await calculateContrast(source, abortController.signal);
+        if (!cancelled && contrast) {
+          contrastUrlRef.current = sourceUrl;
+          onAutoContrast?.(contrast);
+        }
       }
     })();
 
@@ -96,10 +116,38 @@ export function ImageLayer({
       abortController.abort();
       if (layerRef.current) viewer.removeLayer(layerRef.current);
       layerRef.current = null;
-      zLodRef.current = null;
+      sourceRef.current = null;
+      sliceLodRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewer, sourceUrl, onZMaxIndex, onAutoContrast]);
+  }, [viewer, sourceUrl, onMaxSliceIndex, onAutoContrast]);
+
+  useEffect(() => {
+    const layer = layerRef.current;
+    const source = sourceRef.current;
+    if (!viewer || !layer || !source || layer.orientation === orientation) return;
+
+    const axes = planeAxes(orientation);
+    const dims = source.getDimensions();
+    const sliceLod = dims[axes.w]?.lods[0] ?? null;
+    sliceLodRef.current = sliceLod;
+
+    // replace with layer.setSliceCoords() when it becomes available upstream
+    const sliceCoords = sliceCoordsRef.current;
+    for (const axis of ["x", "y", "z"] as const) delete sliceCoords[axis];
+    if (sliceLod) {
+      sliceCoords[axes.w] = indexToWorld(sliceIndexRef.current, sliceLod);
+    }
+
+    layer.setOrientation(orientation);
+
+    const uLod = dims[axes.u]?.lods[0];
+    const vLod = dims[axes.v]?.lods[0];
+    if (uLod && vLod) {
+      viewer.frameTo([0, uLod.size * uLod.scale], [0, vLod.size * vLod.scale]);
+    }
+
+    onMaxSliceIndex?.(sliceLod ? sliceLod.size - 1 : undefined);
+  }, [orientation, viewer, onMaxSliceIndex]);
 
   useEffect(() => {
     layerRef.current?.setChannelProps([
@@ -112,11 +160,11 @@ export function ImageLayer({
   }, [color, contrastLimits]);
 
   useEffect(() => {
-    const zLod = zLodRef.current;
-    if (zLod) {
-      sliceCoordsRef.current.z = indexToWorld(zIndex, zLod);
+    const sliceLod = sliceLodRef.current;
+    if (sliceLod) {
+      sliceCoordsRef.current[planeAxes(orientation).w] = indexToWorld(sliceIndex, sliceLod);
     }
-  }, [zIndex]);
+  }, [sliceIndex, orientation]);
 
   return null;
 }

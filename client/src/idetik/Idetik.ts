@@ -1,17 +1,18 @@
 import {
   Idetik as IdetikRuntime,
   Layer,
-  Overlay,
   OrthographicCamera,
+  Overlay,
   PanZoomControls,
+  type SliceOrientation,
 } from "@idetik/core";
 
 export class Idetik {
   private readonly runtime_: IdetikRuntime;
   private readonly camera_: OrthographicCamera;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.camera_ = new OrthographicCamera(0, 128, 0, 128, -1000, 1000);
+  constructor(canvas: HTMLCanvasElement, orientation: SliceOrientation = "XY") {
+    this.camera_ = new OrthographicCamera(0, 128, 0, 128, { orientation });
     this.runtime_ = new IdetikRuntime({
       canvas,
       viewports: [
@@ -26,6 +27,14 @@ export class Idetik {
 
   get canvas(): HTMLCanvasElement {
     return this.runtime_.canvas;
+  }
+
+  get orientation(): SliceOrientation {
+    return this.camera_.orientation;
+  }
+
+  setOrientation(orientation: SliceOrientation): void {
+    this.camera_.setOrientation(orientation);
   }
 
   addLayer(layer: Layer): void {
@@ -57,20 +66,9 @@ export class Idetik {
     );
   }
 
-  screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
-    const canvas = this.runtime_.canvas;
-    const rect = canvas.getBoundingClientRect();
-    const ndcX = ((clientX - rect.left) / canvas.clientWidth) * 2 - 1;
-    const ndcY = ((clientY - rect.top) / canvas.clientHeight) * 2 - 1;
-
-    const transform = this.camera_.transform;
-    const widthWorld = transform.scale[0] * this.camera_.viewportSize[0];
-    const heightWorld = transform.scale[1] * this.camera_.viewportSize[1];
-
-    return {
-      x: transform.translation[0] + ndcX * (widthWorld / 2),
-      y: transform.translation[1] + ndcY * (heightWorld / 2),
-    };
+  screenToWorld(clientX: number, clientY: number): { x: number; y: number; z: number } {
+    const [x, y, z] = this.viewport_.clientToWorld([clientX, clientY]);
+    return { x, y, z };
   }
 
   dispose(): void {
