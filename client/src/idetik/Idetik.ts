@@ -66,7 +66,10 @@ export class Idetik {
     );
   }
 
-  screenToWorld(clientX: number, clientY: number): { x: number; y: number; z: number } {
+  screenToWorld(
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number; z: number } {
     const [x, y, z] = this.viewport_.clientToWorld([clientX, clientY]);
     return { x, y, z };
   }

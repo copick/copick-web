@@ -95,7 +95,10 @@ export function ImageLayer({
       const uLod = dims[axes.u]?.lods[0];
       const vLod = dims[axes.v]?.lods[0];
       if (uLod && vLod) {
-        viewer.frameTo([0, uLod.size * uLod.scale], [0, vLod.size * vLod.scale]);
+        viewer.frameTo(
+          [0, uLod.size * uLod.scale],
+          [0, vLod.size * vLod.scale],
+        );
       }
 
       onMaxSliceIndex?.(sliceLod ? sliceLod.size - 1 : undefined);
@@ -103,7 +106,10 @@ export function ImageLayer({
       // only compute auto-contrast once per source, so switching the slice
       // orientation doesn't clobber user-adjusted contrast settings.
       if (contrastUrlRef.current !== sourceUrl) {
-        const contrast = await calculateContrast(source, abortController.signal);
+        const contrast = await calculateContrast(
+          source,
+          abortController.signal,
+        );
         if (!cancelled && contrast) {
           contrastUrlRef.current = sourceUrl;
           onAutoContrast?.(contrast);
@@ -124,7 +130,8 @@ export function ImageLayer({
   useEffect(() => {
     const layer = layerRef.current;
     const source = sourceRef.current;
-    if (!viewer || !layer || !source || layer.orientation === orientation) return;
+    if (!viewer || !layer || !source || layer.orientation === orientation)
+      return;
 
     const axes = planeAxes(orientation);
     const dims = source.getDimensions();
@@ -162,7 +169,10 @@ export function ImageLayer({
   useEffect(() => {
     const sliceLod = sliceLodRef.current;
     if (sliceLod) {
-      sliceCoordsRef.current[planeAxes(orientation).w] = indexToWorld(sliceIndex, sliceLod);
+      sliceCoordsRef.current[planeAxes(orientation).w] = indexToWorld(
+        sliceIndex,
+        sliceLod,
+      );
     }
   }, [sliceIndex, orientation]);
 

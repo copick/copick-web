@@ -24,7 +24,13 @@ export class PicksLayer extends Layer {
   private slicePosition_ = 0;
   private needsUpdate_ = true;
 
-  constructor({ points, color, pointSizePixels, fadeRadius, orientation }: PicksLayerOptions) {
+  constructor({
+    points,
+    color,
+    pointSizePixels,
+    fadeRadius,
+    orientation,
+  }: PicksLayerOptions) {
     super({ blendMode: "normal" });
     this.points_ = points;
     this.rgb_ = [color[0] / 255, color[1] / 255, color[2] / 255];
@@ -65,7 +71,8 @@ export class PicksLayer extends Layer {
     const { u, v, w } = this.axes_;
 
     for (const pt of this.points_) {
-      const zScale = Math.abs(pt[w] - this.slicePosition_) / this.fadeRadius_ + 1.0;
+      const zScale =
+        Math.abs(pt[w] - this.slicePosition_) / this.fadeRadius_ + 1.0;
       const size = (this.pointSizePixels_ * dpr) / zScale;
       if (size < 0.1) continue;
 
