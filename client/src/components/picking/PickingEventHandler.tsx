@@ -1,20 +1,23 @@
 import { useCallback, useEffect } from "react";
 import { Idetik } from "@/idetik/Idetik";
+import { planeAxes } from "@/idetik/orientation";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
+
+type WorldPoint = { x: number; y: number; z: number };
 
 interface PickingEventHandlerProps {
   viewer: Idetik | null;
-  currentZIndex: number;
-  onZIndexChange: (newIndex: number) => void;
-  maxZIndex: number | undefined;
+  sliceIndex: number;
+  onSliceIndexChange: (newIndex: number) => void;
+  maxSliceIndex: number | undefined;
   voxelSpacing: number;
 }
 
 export function PickingEventHandler({
   viewer,
-  currentZIndex,
-  onZIndexChange,
-  maxZIndex,
+  sliceIndex,
+  onSliceIndexChange,
+  maxSliceIndex,
   voxelSpacing,
 }: PickingEventHandlerProps) {
   const {
@@ -27,16 +30,17 @@ export function PickingEventHandler({
   } = usePicking();
 
   const findNearestPoint = useCallback(
-    (worldX: number, worldY: number, threshold = 50): PickingPoint | null => {
-      if (!isEditing) return null;
+    (world: WorldPoint, threshold = 50): PickingPoint | null => {
+      if (!isEditing || !viewer) return null;
 
-      const currentZ = currentZIndex * voxelSpacing;
+      const { u, v, w } = planeAxes(viewer.orientation);
+      const slicePosition = sliceIndex * voxelSpacing;
       let nearest: PickingPoint | null = null;
       let minDist = threshold;
 
       for (const point of pickingState.localPoints) {
-        if (Math.abs(point.z - currentZ) > voxelSpacing * 3) continue;
-        const dist = Math.hypot(point.x - worldX, point.y - worldY);
+        if (Math.abs(point[w] - slicePosition) > voxelSpacing * 3) continue;
+        const dist = Math.hypot(point[u] - world[u], point[v] - world[v]);
         if (dist < minDist) {
           minDist = dist;
           nearest = point;
@@ -45,7 +49,7 @@ export function PickingEventHandler({
 
       return nearest;
     },
-    [isEditing, pickingState.localPoints, currentZIndex, voxelSpacing],
+    [isEditing, pickingState.localPoints, viewer, sliceIndex, voxelSpacing],
   );
 
   const handleClick = useCallback(
@@ -53,8 +57,9 @@ export function PickingEventHandler({
       if (!viewer || !isEditing) return;
       if ((event.target as HTMLElement).tagName !== "CANVAS") return;
 
+      const { w } = planeAxes(viewer.orientation);
       const world = viewer.screenToWorld(event.clientX, event.clientY);
-      const currentZ = currentZIndex * voxelSpacing;
+      world[w] = sliceIndex * voxelSpacing;
 
       switch (pickingState.activeTool) {
         case "add":
@@ -62,18 +67,18 @@ export function PickingEventHandler({
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
             x: world.x,
             y: world.y,
-            z: currentZ,
+            z: world.z,
             score: 1.0,
           });
           break;
         case "select": {
-          const nearest = findNearestPoint(world.x, world.y);
+          const nearest = findNearestPoint(world);
           if (nearest) selectPoint(nearest.id, event.shiftKey);
           else if (!event.shiftKey) clearSelection();
           break;
         }
         case "delete": {
-          const nearest = findNearestPoint(world.x, world.y);
+          const nearest = findNearestPoint(world);
           if (nearest) deletePoint(nearest.id);
           break;
         }
@@ -88,22 +93,22 @@ export function PickingEventHandler({
       selectPoint,
       deletePoint,
       clearSelection,
-      currentZIndex,
+      sliceIndex,
       voxelSpacing,
     ],
   );
 
   const handleWheel = useCallback(
     (event: WheelEvent) => {
-      if (!event.shiftKey || maxZIndex === undefined) return;
+      if (!event.shiftKey || maxSliceIndex === undefined) return;
       if ((event.target as HTMLElement).tagName !== "CANVAS") return;
 
       event.preventDefault();
       const delta = event.deltaY > 0 ? 1 : -1;
-      const newIndex = Math.max(0, Math.min(maxZIndex, currentZIndex + delta));
-      if (newIndex !== currentZIndex) onZIndexChange(newIndex);
+      const newIndex = Math.max(0, Math.min(maxSliceIndex, sliceIndex + delta));
+      if (newIndex !== sliceIndex) onSliceIndexChange(newIndex);
     },
-    [currentZIndex, maxZIndex, onZIndexChange],
+    [sliceIndex, maxSliceIndex, onSliceIndexChange],
   );
 
   useEffect(() => {

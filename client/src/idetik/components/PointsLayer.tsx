@@ -1,18 +1,20 @@
 import { useEffect, useRef } from "react";
+import type { SliceOrientation } from "@idetik/core";
 import { Idetik } from "../Idetik";
 import { PicksLayer } from "../PicksLayer";
 
 type Rgba = [number, number, number, number];
 type Point = { x: number; y: number; z: number };
 
-const Z_FADE_RADIUS = 64.0;
+const FADE_RADIUS = 64.0;
 
 interface PointsLayerProps {
   viewer: Idetik;
   points: Point[] | undefined;
   color: Rgba | undefined;
   pointSizePixels: number;
-  worldZ: number;
+  orientation: SliceOrientation;
+  slicePosition: number;
 }
 
 export function PointsLayer({
@@ -20,11 +22,14 @@ export function PointsLayer({
   points,
   color,
   pointSizePixels,
-  worldZ,
+  orientation,
+  slicePosition,
 }: PointsLayerProps) {
   const layerRef = useRef<PicksLayer | null>(null);
-  const worldZRef = useRef(worldZ);
-  worldZRef.current = worldZ;
+  const orientationRef = useRef(orientation);
+  const slicePositionRef = useRef(slicePosition);
+  orientationRef.current = orientation;
+  slicePositionRef.current = slicePosition;
 
   useEffect(() => {
     if (!points || points.length === 0 || !color) return;
@@ -33,9 +38,10 @@ export function PointsLayer({
       points,
       color,
       pointSizePixels,
-      zFadeRadius: Z_FADE_RADIUS,
+      fadeRadius: FADE_RADIUS,
+      orientation: orientationRef.current,
     });
-    layer.setCurrentZ(worldZRef.current);
+    layer.setSlicePosition(slicePositionRef.current);
     viewer.addLayer(layer);
     layerRef.current = layer;
 
@@ -46,8 +52,12 @@ export function PointsLayer({
   }, [viewer, points, color, pointSizePixels]);
 
   useEffect(() => {
-    layerRef.current?.setCurrentZ(worldZ);
-  }, [worldZ]);
+    layerRef.current?.setOrientation(orientation);
+  }, [orientation]);
+
+  useEffect(() => {
+    layerRef.current?.setSlicePosition(slicePosition);
+  }, [slicePosition]);
 
   return null;
 }
