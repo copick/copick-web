@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.3](https://github.com/copick/copick-web/compare/client-v0.1.2...client-v0.1.3) (2026-07-31)
+
+
+### Features
+
+* selectable slice orientations ([0f3bb06](https://github.com/copick/copick-web/commit/0f3bb06fc945922ecc3e2ebea9521759efcac1f2))
+* selectable slice orientations ([f4b9a34](https://github.com/copick/copick-web/commit/f4b9a34f28c7b50bb948d978609fc27ffc220165))
+
 ## [0.1.2](https://github.com/copick/copick-web/compare/client-v0.1.1...client-v0.1.2) (2026-07-24)
 
 
