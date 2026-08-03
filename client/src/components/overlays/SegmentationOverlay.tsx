@@ -3,6 +3,7 @@ import { Idetik } from "@/idetik/Idetik";
 import { SegmentationLayer } from "@/idetik/components/SegmentationLayer";
 import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { useSegmentations, useObjects } from "@/api/hooks";
+import { resolveZarrUrl } from "@/utils/zarrUrl";
 
 type Rgba = [number, number, number, number];
 
@@ -76,7 +77,7 @@ export function SegmentationOverlay({
           <SegmentationLayer
             key={`${seg.name}-${seg.userId}-${seg.sessionId}-${seg.voxelSize}`}
             viewer={viewer}
-            sourceUrl={`${window.location.origin}${segData.zarr_url}`}
+            sourceUrl={resolveZarrUrl(segData.zarr_url)}
             lookupTable={lookupTable}
             orientation={orientation}
             slicePosition={slicePosition}

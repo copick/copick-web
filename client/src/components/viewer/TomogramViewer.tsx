@@ -10,6 +10,7 @@ import { useCopick } from "@/contexts/CopickContext";
 import { ViewerControls } from "./ViewerControls";
 import { ChannelControls } from "./ChannelControls";
 import type { Contrast } from "@/idetik/contrastStats";
+import { resolveZarrUrl } from "@/utils/zarrUrl";
 import { SegmentationOverlay } from "@/components/overlays/SegmentationOverlay";
 import { InteractivePicksOverlay } from "@/components/overlays/InteractivePicksOverlay";
 import { PickingToolbar } from "@/components/picking/PickingToolbar";
@@ -74,7 +75,7 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
         <Canvas canvasRefCallback={canvasRefCallback} />
         <ImageLayer
           viewer={viewer}
-          sourceUrl={`${window.location.origin}${zarrUrl}`}
+          sourceUrl={resolveZarrUrl(zarrUrl)}
           orientation={orientation}
           sliceIndex={sliceIndex}
           color={color}
