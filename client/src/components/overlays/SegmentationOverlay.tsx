@@ -14,15 +14,13 @@ function toLabelColor([r, g, b, a]: Rgba): Rgba {
 interface SegmentationOverlayProps {
   viewer: Idetik | null;
   orientation: SliceOrientation;
-  sliceIndex: number;
-  voxelSpacing: number;
+  slicePosition: number;
 }
 
 export function SegmentationOverlay({
   viewer,
   orientation,
-  sliceIndex,
-  voxelSpacing,
+  slicePosition,
 }: SegmentationOverlayProps) {
   const { state: copickState } = useCopick();
   const projectId = useProjectId();
@@ -32,7 +30,6 @@ export function SegmentationOverlay({
   );
   const { data: objects } = useObjects(projectId);
 
-  const slicePosition = sliceIndex * voxelSpacing;
   const visibleSegmentations = copickState.selectedSegmentations.filter(
     (s) => s.visible,
   );

@@ -4,6 +4,12 @@ export type SpatialAxis = "x" | "y" | "z";
 
 export type PlaneAxes = { u: SpatialAxis; v: SpatialAxis; w: SpatialAxis };
 
+export type DimensionLod = { size: number; scale: number; translation: number };
+
+export function indexToWorld(index: number, lod: DimensionLod): number {
+  return lod.translation + index * lod.scale;
+}
+
 export function toSliceOrientation(axis: "xy" | "xz" | "yz"): SliceOrientation {
   switch (axis) {
     case "xy":

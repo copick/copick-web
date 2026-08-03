@@ -4,7 +4,11 @@ import { useIdetik } from "@/idetik/useIdetik";
 import { Canvas } from "@/idetik/components/Canvas";
 import { ImageLayer } from "@/idetik/components/ImageLayer";
 import { ScaleBar } from "@/idetik/components/ScaleBar";
-import { toSliceOrientation } from "@/idetik/orientation";
+import {
+  indexToWorld,
+  toSliceOrientation,
+  type DimensionLod,
+} from "@/idetik/orientation";
 import { ViewerProvider, useViewer } from "@/contexts/ViewerContext";
 import { useCopick } from "@/contexts/CopickContext";
 import { ViewerControls } from "./ViewerControls";
@@ -31,9 +35,12 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   const { state: copickState } = useCopick();
   const voxelSpacing = copickState.selectedVoxelSize ?? 1;
   const [sliceIndex, setSliceIndex] = useState(0);
-  const [maxSliceIndex, setMaxSliceIndex] = useState<number | undefined>(
-    undefined,
-  );
+  const [sliceLod, setSliceLod] = useState<DimensionLod | null>(null);
+
+  const maxSliceIndex = sliceLod ? sliceLod.size - 1 : undefined;
+  const slicePosition = sliceLod
+    ? indexToWorld(sliceIndex, sliceLod)
+    : sliceIndex * voxelSpacing;
 
   const [color, setColor] = useState("#ffffff");
   const [contrastLimits, setContrastLimits] = useState<
@@ -44,10 +51,10 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   >(undefined);
   const autoLimitsRef = useRef<[number, number] | null>(null);
 
-  const handleMaxSliceIndex = useCallback((max: number | undefined) => {
-    setMaxSliceIndex(max);
-    if (max !== undefined) {
-      setSliceIndex(Math.floor(max / 2));
+  const handleSliceLod = useCallback((lod: DimensionLod | null) => {
+    setSliceLod(lod);
+    if (lod) {
+      setSliceIndex(Math.floor((lod.size - 1) / 2));
     }
   }, []);
 
@@ -80,14 +87,13 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
           sliceIndex={sliceIndex}
           color={color}
           contrastLimits={contrastLimits}
-          onMaxSliceIndex={handleMaxSliceIndex}
+          onSliceLod={handleSliceLod}
           onAutoContrast={handleAutoContrast}
         />
         <SegmentationOverlay
           viewer={viewer}
           orientation={orientation}
-          sliceIndex={sliceIndex}
-          voxelSpacing={voxelSpacing}
+          slicePosition={slicePosition}
         />
         <InteractivePicksOverlay
           viewer={viewer}
