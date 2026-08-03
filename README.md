@@ -241,12 +241,6 @@ All metadata and zarr-proxy routes are scoped under a `project_id`.
 - `GET /zarr/{project_id}/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
 - `GET /zarr/{project_id}/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
 
-### Project IDs
-
-- Local configs: filename stem (e.g. `copick_config.json` → `copick_config`).
-- Registry projects: `{cluster_id}-{session_name}-{run_name}`
-  (e.g. `bruno-26mar13b-run001`).
-
 ## Architecture
 
 ```

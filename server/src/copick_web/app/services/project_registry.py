@@ -1,5 +1,7 @@
 """In-process project registry: merges local configs with a registry API.
 
+- **Local**: registered at startup from ``COPICK_CONFIG_PATHS``.
+
 - **Registry**: discovered by polling an external HTTP registry
   (``RegistryClient.list_projects``) which returns ``ProjectEntry`` rows
   containing ``config_url``, ``data_url``, ``cluster_id``, etc.
@@ -24,6 +26,7 @@ The registry list itself is refreshed on a background timer; refresh
 failures keep the previous snapshot rather than emptying the cache.
 """
 
+import hashlib
 import json
 import logging
 import threading
@@ -48,13 +51,40 @@ class _LocalProject:
 
     id: str
     config_path: str
+    name: Optional[str] = None
+    description: Optional[str] = None
 
     def to_summary(self) -> ProjectSummaryResponse:
-        return ProjectSummaryResponse(id=self.id, source="local")
+        return ProjectSummaryResponse(
+            id=self.id,
+            source="local",
+            name=self.name,
+            description=self.description,
+        )
 
 
 def _registry_id(entry: ProjectEntry) -> str:
     return f"{entry.cluster_id}-{entry.session_name}-{entry.run_name}"
+
+
+def _local_id(resolved: Path) -> str:
+    """Deterministic opaque id for a local config."""
+    key = f"{resolved.parent.name}/{resolved.name}"
+    return hashlib.sha256(key.encode()).hexdigest()[:12]
+
+
+def _read_config_metadata(path: Path) -> tuple[Optional[str], Optional[str]]:
+    """Read ``name``/``description`` out of a copick config without materializing it."""
+    try:
+        with path.open() as f:
+            cfg = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("Could not read metadata from %s: %s", path, e)
+        return None, None
+    if not isinstance(cfg, dict):
+        logger.warning("Config %s is not a JSON object; no name/description available.", path)
+        return None, None
+    return cfg.get("name"), cfg.get("description")
 
 
 _LOCAL_SCHEME = "local://"
@@ -183,10 +213,22 @@ class ProjectRegistry:
         resolved = Path(path).resolve()
         if not resolved.exists():
             raise FileNotFoundError(f"Local config not found: {resolved}")
-        pid = resolved.stem
-        if pid in self._local_projects:
-            logger.warning("Local project id %s already registered; replacing.", pid)
-        self._local_projects[pid] = _LocalProject(id=pid, config_path=str(resolved))
+        pid = _local_id(resolved)
+        existing = self._local_projects.get(pid)
+        if existing is not None and existing.config_path != str(resolved):
+            logger.warning(
+                "Local project id %s: %s replaces %s (same parent dir + filename).",
+                pid,
+                resolved,
+                existing.config_path,
+            )
+        name, description = _read_config_metadata(resolved)
+        self._local_projects[pid] = _LocalProject(
+            id=pid,
+            config_path=str(resolved),
+            name=name,
+            description=description,
+        )
         return pid
 
     # --- Registry refresh ---

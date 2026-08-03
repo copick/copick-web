@@ -123,12 +123,17 @@ function ProjectCard({ project }: { project: ProjectSummaryResponse }) {
               flexWrap: "wrap",
             }}
           >
-            <Typography variant="h6">{project.id}</Typography>
+            <Typography variant="h6">{project.name ?? project.id}</Typography>
             <Chip label={project.source} size="small" variant="outlined" />
             {project.status && (
               <Chip label={project.status} size="small" color={statusColor} />
             )}
           </Box>
+          {project.description && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {project.description}
+            </Typography>
+          )}
           <Box
             sx={{
               display: "flex",

@@ -47,7 +47,12 @@ async def lifespan(app: FastAPI):
     for path in settings.copick_config_paths:
         try:
             pid = registry.register_local(path)
-            logger.info("Registered local project '%s' from %s", pid, path)
+            logger.info(
+                "Registered local project '%s' (%s) from %s",
+                pid,
+                registry.get_metadata(pid).name or "unnamed",
+                path,
+            )
         except FileNotFoundError as e:
             logger.error("Local config not found, skipping: %s (%s)", path, e)
 
