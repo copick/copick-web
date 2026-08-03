@@ -11,6 +11,16 @@ import { planeAxes } from "../orientation";
 
 type Rgba = [number, number, number, number];
 
+/**
+ * A label layer that never depth-tests against the layers beneath it.
+ */
+class OverlayLabelLayer extends LabelLayer {
+  override update(viewport?: Parameters<LabelLayer["update"]>[0]) {
+    super.update(viewport);
+    for (const object of this.objects) object.depthTest = false;
+  }
+}
+
 interface SegmentationLayerProps {
   viewer: Idetik;
   sourceUrl: string;
@@ -26,7 +36,7 @@ export function SegmentationLayer({
   orientation,
   slicePosition,
 }: SegmentationLayerProps) {
-  const layerRef = useRef<LabelLayer | null>(null);
+  const layerRef = useRef<OverlayLabelLayer | null>(null);
   const sliceCoordsRef = useRef<SliceCoordinates>({});
   const lookupTableRef = useRef(lookupTable);
   const orientationRef = useRef(orientation);
@@ -47,7 +57,7 @@ export function SegmentationLayer({
       const sliceCoords: SliceCoordinates = {};
       sliceCoords[axes.w] = slicePositionRef.current;
       sliceCoordsRef.current = sliceCoords;
-      const layer = new LabelLayer({
+      const layer = new OverlayLabelLayer({
         source,
         sliceCoords,
         colorMap: { lookupTable: lookupTableRef.current },

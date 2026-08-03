@@ -4,24 +4,43 @@ services:
     volumes:
       - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
       - ${COPICK_DATA_DIR:-./data}:/data/copick_data
+      # Service-account SSH key for reaching HPC overlay roots (registry
+      # projects only). Mount only when SLURM_KEYFILE is set on the host.
+      - ${SLURM_KEYFILE:-/dev/null}:/run/secrets/slurm_key:ro
     environment:
-      - COPICK_CONFIG_PATH=/data/copick_config.json
+      - COPICK_CONFIG_PATHS=["/data/copick_config.json"]
+      - REGISTRY_URL=${REGISTRY_URL:-}
+      - REGISTRY_REFRESH_SECONDS=${REGISTRY_REFRESH_SECONDS:-60}
+      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-32}
       - BASE_PATH=${BASE_PATH:-}
+      - SLURM_USER=${SLURM_USER:-}
+      - SLURM_KEYFILE=/run/secrets/slurm_key
+      - SLURM_SSH_PORT=${SLURM_SSH_PORT:-22}
+    extra_hosts:
+      # Lets REGISTRY_URL=http://host.containers.internal:<port>/... reach the host machine.
+      - "host.containers.internal:host-gateway"
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     networks:
       - copick-net
 
   client:
     image: ghcr.io/copick/copick-web-client:latest
     ports:
-      - "${SERVER_HOST_PORT:-8880}:80"
+      - "${PUBLIC_HOST_PORT:-8880}:80"
     environment:
       - BASE_PATH=${BASE_PATH:-}
     depends_on:
       - server
     restart: unless-stopped
     networks:
-      - copick-net
+      copick-net:
 
 networks:
   copick-net:

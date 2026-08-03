@@ -1,8 +1,9 @@
 import type { SliceOrientation } from "@idetik/core";
 import { Idetik } from "@/idetik/Idetik";
 import { SegmentationLayer } from "@/idetik/components/SegmentationLayer";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { useSegmentations, useObjects } from "@/api/hooks";
+import { resolveZarrUrl } from "@/utils/zarrUrl";
 
 type Rgba = [number, number, number, number];
 
@@ -13,21 +14,22 @@ function toLabelColor([r, g, b, a]: Rgba): Rgba {
 interface SegmentationOverlayProps {
   viewer: Idetik | null;
   orientation: SliceOrientation;
-  sliceIndex: number;
-  voxelSpacing: number;
+  slicePosition: number;
 }
 
 export function SegmentationOverlay({
   viewer,
   orientation,
-  sliceIndex,
-  voxelSpacing,
+  slicePosition,
 }: SegmentationOverlayProps) {
   const { state: copickState } = useCopick();
-  const { data: segmentations } = useSegmentations(copickState.selectedRunName);
-  const { data: objects } = useObjects();
+  const projectId = useProjectId();
+  const { data: segmentations } = useSegmentations(
+    projectId,
+    copickState.selectedRunName,
+  );
+  const { data: objects } = useObjects(projectId);
 
-  const slicePosition = sliceIndex * voxelSpacing;
   const visibleSegmentations = copickState.selectedSegmentations.filter(
     (s) => s.visible,
   );
@@ -72,7 +74,7 @@ export function SegmentationOverlay({
           <SegmentationLayer
             key={`${seg.name}-${seg.userId}-${seg.sessionId}-${seg.voxelSize}`}
             viewer={viewer}
-            sourceUrl={`${window.location.origin}${segData.zarr_url}`}
+            sourceUrl={resolveZarrUrl(segData.zarr_url)}
             lookupTable={lookupTable}
             orientation={orientation}
             slicePosition={slicePosition}

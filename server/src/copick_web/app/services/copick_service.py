@@ -1,16 +1,50 @@
 """Copick data access service."""
 
+import logging
+import threading
 from typing import Optional
 
 import copick
 
+logger = logging.getLogger(__name__)
+
 
 class CopickService:
-    """Service for accessing copick data."""
+    """Service for accessing copick data.
 
-    def __init__(self, config_path: str):
-        """Initialize with a copick configuration file path."""
-        self.root = copick.from_file(config_path)
+    Used by both project sources (local config and registry). The metadata
+    methods (``get_runs``, ``get_picks``, ``get_segmentations``, ...) are shared
+
+    The zarr-store accessors below are only hit for **local** projects:
+    the ``/zarr/{pid}/...`` proxy route resolves chunks through this
+    service. Registry projects publish ``data_url`` and the browser
+    fetches chunks directly, so ``_tomo_store_cache`` /
+    ``_seg_store_cache`` stay empty in pure-registry deployments. See
+    ``services/project_registry.py`` for the source split and
+    ``services/zarr_urls.py`` for the URL routing.
+    """
+
+    def __init__(self, root):
+        """Initialize with a pre-built copick root."""
+        self.root = root
+        # Zarr-store mappers built from copick objects. The proxy routes hit
+        # these on every chunk fetch — caching avoids re-walking the copick
+        # tree and re-opening the fsspec mapper for each of the hundreds of
+        # chunks that make up a single tomogram view. Local-mode only;
+        # registry projects bypass the proxy entirely.
+        self._tomo_store_cache: dict[tuple[str, float, str], object] = {}
+        self._seg_store_cache: dict[tuple[str, str, str, str, float], object] = {}
+        self._store_cache_lock = threading.Lock()
+
+    @classmethod
+    def from_config_path(cls, config_path: str) -> "CopickService":
+        """Build a service from a local copick config file path."""
+        return cls(copick.from_file(config_path))
+
+    @classmethod
+    def from_config_string(cls, config_body: str) -> "CopickService":
+        """Build a service from a raw config JSON body (e.g., fetched from registry)."""
+        return cls(copick.from_string(config_body))
 
     @property
     def config(self):
@@ -31,7 +65,22 @@ class CopickService:
 
     def get_runs(self) -> list[str]:
         """Get all run names."""
-        return [run.name for run in self.root.runs]
+        names = [run.name for run in self.root.runs]
+        if not names:
+            cfg = self.root.config
+            logger.warning(
+                "get_runs returned 0 runs. config_type=%s overlay_root=%s overlay_fs_args=%s "
+                "static_root=%s static_fs_args=%s explicit_runs=%s",
+                getattr(cfg, "config_type", None),
+                getattr(cfg, "overlay_root", None),
+                getattr(cfg, "overlay_fs_args", None),
+                getattr(cfg, "static_root", None),
+                getattr(cfg, "static_fs_args", None),
+                getattr(cfg, "runs", None),
+            )
+        else:
+            logger.debug("get_runs returned %d runs: %s", len(names), names[:5])
+        return names
 
     def get_run(self, name: str):
         """Get a run by name."""
@@ -65,11 +114,26 @@ class CopickService:
         return vs.get_tomogram(tomo_type)
 
     def get_tomogram_zarr_store(self, run_name: str, voxel_size: float, tomo_type: str):
-        """Get the zarr store for a tomogram."""
+        """Get the zarr store for a tomogram (cached per service instance)."""
+        key = (run_name, voxel_size, tomo_type)
+        with self._store_cache_lock:
+            cached = self._tomo_store_cache.get(key)
+        if cached is not None:
+            return cached
+
         tomo = self.get_tomogram(run_name, voxel_size, tomo_type)
         if not tomo:
             return None
-        return tomo.zarr()
+        store = tomo.zarr()
+
+        with self._store_cache_lock:
+            # Race-safe: if another thread built one in the meantime, prefer theirs
+            # (functionally identical, but keeps a single canonical instance).
+            existing = self._tomo_store_cache.get(key)
+            if existing is not None:
+                return existing
+            self._tomo_store_cache[key] = store
+        return store
 
     def get_picks(
         self,
@@ -126,11 +190,24 @@ class CopickService:
         return segs
 
     def get_segmentation_zarr_store(self, run_name: str, name: str, user_id: str, session_id: str, voxel_size: float):
-        """Get the zarr store for a segmentation."""
+        """Get the zarr store for a segmentation (cached per service instance)."""
+        key = (run_name, name, user_id, session_id, voxel_size)
+        with self._store_cache_lock:
+            cached = self._seg_store_cache.get(key)
+        if cached is not None:
+            return cached
+
         segs = self.get_segmentations(run_name, name, user_id, session_id, voxel_size)
         if not segs:
             return None
-        return segs[0].zarr()
+        store = segs[0].zarr()
+
+        with self._store_cache_lock:
+            existing = self._seg_store_cache.get(key)
+            if existing is not None:
+                return existing
+            self._seg_store_cache[key] = store
+        return store
 
     # --- Picks mutation methods ---
 
@@ -251,21 +328,3 @@ class CopickService:
             session_id=session_id,
         )
         return True
-
-
-# Global service instance (set in main.py)
-copick_service: Optional[CopickService] = None
-
-
-def get_copick_service() -> CopickService:
-    """Get the global copick service instance."""
-    if copick_service is None:
-        raise RuntimeError("CopickService not initialized")
-    return copick_service
-
-
-def init_copick_service(config_path: str) -> CopickService:
-    """Initialize the global copick service."""
-    global copick_service
-    copick_service = CopickService(config_path)
-    return copick_service

@@ -2,13 +2,36 @@
  * Sidebar with navigation tree and entity tables.
  */
 
-import { Box, Typography, Divider } from "@mui/material";
-import { useConfig } from "@/api/hooks";
+import {
+  Box,
+  Typography,
+  Divider,
+  Button,
+  IconButton,
+  Tooltip,
+  CircularProgress,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import { Link } from "react-router-dom";
+import { useConfig, useProjects, useReloadProject } from "@/api/hooks";
+import { useProjectId } from "@/contexts/CopickContext";
+import { useResetProjectUI } from "@/pages/ProjectPage";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 
 export function Sidebar() {
-  const { data: config } = useConfig();
+  const projectId = useProjectId();
+  const { data: config } = useConfig(projectId);
+  const { data: projects } = useProjects();
+  const resetProjectUI = useResetProjectUI();
+  const reloadProject = useReloadProject();
+  const showBackLink = (projects?.length ?? 0) > 1;
+
+  const handleReload = () => {
+    resetProjectUI();
+    reloadProject.mutate(projectId);
+  };
 
   return (
     <Box
@@ -21,6 +44,17 @@ export function Sidebar() {
     >
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        {showBackLink && (
+          <Button
+            component={Link}
+            to="/"
+            size="small"
+            startIcon={<ArrowBackIcon />}
+            sx={{ mb: 1, ml: -0.5 }}
+          >
+            Projects
+          </Button>
+        )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box
             component="img"
@@ -28,9 +62,25 @@ export function Sidebar() {
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
-          <Typography variant="h6" noWrap>
-            {config?.name ?? "Copick Web"}
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
+            {config?.name ?? projectId}
           </Typography>
+          <Tooltip title="Reload project (drops server cache and SSH connection)">
+            <span>
+              <IconButton
+                size="small"
+                onClick={handleReload}
+                disabled={reloadProject.isPending}
+                aria-label="Reload project"
+              >
+                {reloadProject.isPending ? (
+                  <CircularProgress size={18} />
+                ) : (
+                  <RefreshIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
         {config?.description && (
           <Typography variant="caption" color="text.secondary" noWrap>

@@ -188,6 +188,7 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
 
 // Context type
 interface CopickContextType {
+  projectId: string;
   state: CopickState;
   dispatch: React.Dispatch<CopickAction>;
   // Convenience actions
@@ -212,10 +213,17 @@ interface CopickContextType {
 const CopickContext = createContext<CopickContextType | null>(null);
 
 // Provider component
-export function CopickProvider({ children }: { children: ReactNode }) {
+export function CopickProvider({
+  projectId,
+  children,
+}: {
+  projectId: string;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(copickReducer, initialState);
 
   const actions: CopickContextType = {
+    projectId,
     state,
     dispatch,
     selectRun: (runName) => dispatch({ type: "SELECT_RUN", runName }),
@@ -253,6 +261,15 @@ export function useCopick(): CopickContextType {
     throw new Error("useCopick must be used within a CopickProvider");
   }
   return context;
+}
+
+// Hook to access the current project id without subscribing to selection state.
+export function useProjectId(): string {
+  const context = useContext(CopickContext);
+  if (!context) {
+    throw new Error("useProjectId must be used within a CopickProvider");
+  }
+  return context.projectId;
 }
 
 /**

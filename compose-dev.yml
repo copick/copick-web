@@ -4,15 +4,28 @@ services:
       context: ./server
       dockerfile: Dockerfile.dev
     ports:
-      - "${SERVER_HOST_PORT:-8880}:8000"
+      - "${DEV_SERVER_HOST_PORT:-8880}:8000"
     volumes:
       - ./server:/app
       - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
       - ${COPICK_DATA_DIR:-./data}:/data/copick_data
+      # Service-account SSH key for reaching HPC overlay roots (registry
+      # projects only). Mount only when SLURM_KEYFILE is set on the host.
+      - ${SLURM_KEYFILE:-/dev/null}:/run/secrets/slurm_key:ro
     environment:
-      - COPICK_CONFIG_PATH=/data/copick_config.json
-      - CORS_ORIGINS=["http://localhost:${CLIENT_HOST_PORT:-5180}","http://localhost:${SERVER_HOST_PORT:-8880}"]
+      - COPICK_CONFIG_PATHS=["/data/copick_config.json"]
+      - REGISTRY_URL=${REGISTRY_URL:-}
+      - REGISTRY_REFRESH_SECONDS=${REGISTRY_REFRESH_SECONDS:-60}
+      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-32}
+      - CORS_ORIGINS=["http://localhost:${DEV_CLIENT_HOST_PORT:-5180}","http://localhost:${DEV_SERVER_HOST_PORT:-8880}"]
       - BASE_PATH=${BASE_PATH:-}
+      - SLURM_USER=${SLURM_USER:-}
+      - SLURM_KEYFILE=/run/secrets/slurm_key
+      - SLURM_SSH_PORT=${SLURM_SSH_PORT:-22}
+    extra_hosts:
+      # Lets REGISTRY_URL=http://host.containers.internal:<port>/... reach the host machine.
+      - "host.containers.internal:host-gateway"
+      - "host.docker.internal:host-gateway"
     networks:
       - copick-net
 
@@ -21,18 +34,18 @@ services:
       context: ./client
       dockerfile: Dockerfile.dev
     ports:
-      - "${CLIENT_HOST_PORT:-5180}:5173"
+      - "${DEV_CLIENT_HOST_PORT:-5180}:5173"
     volumes:
       - ./client:/app
       - /app/node_modules
     environment:
       - API_PROXY_TARGET=http://server:8000
-      - VITE_HMR_CLIENT_PORT=${CLIENT_HOST_PORT:-5180}
+      - VITE_HMR_CLIENT_PORT=${DEV_CLIENT_HOST_PORT:-5180}
       - BASE_PATH=${BASE_PATH:-}
     depends_on:
       - server
     networks:
-      - copick-net
+      copick-net:
 
 networks:
   copick-net:

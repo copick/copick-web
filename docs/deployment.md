@@ -29,7 +29,7 @@ Edit `.env` to point to your copick config and data:
 
 ```bash
 # .env
-SERVER_HOST_PORT=8880
+PUBLIC_HOST_PORT=8880
 COPICK_CONFIG_PATH=/path/to/your/copick_config.json
 COPICK_DATA_DIR=/path/to/your/copick/data
 BASE_PATH=
@@ -44,7 +44,7 @@ BASE_PATH=
 podman compose -f compose-prod.yml up -d
 ```
 
-The app is now available at `http://<your-vm-ip>:8880` (or whichever port you set for `SERVER_HOST_PORT`).
+The app is now available at `http://<your-vm-ip>:8880` (or whichever port you set for `PUBLIC_HOST_PORT`).
 
 ### 5. Check status
 

@@ -20,10 +20,11 @@ import {
   Image,
 } from "@mui/icons-material";
 import { useRuns, useRun } from "@/api/hooks";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 
 export function RunTree() {
-  const { data: runs, isLoading, error } = useRuns();
+  const projectId = useProjectId();
+  const { data: runs, isLoading, error } = useRuns(projectId);
 
   if (isLoading) {
     return (
@@ -105,7 +106,8 @@ interface VoxelSpacingListProps {
 }
 
 function VoxelSpacingList({ runName }: VoxelSpacingListProps) {
-  const { data: run, isLoading } = useRun(runName);
+  const projectId = useProjectId();
+  const { data: run, isLoading } = useRun(projectId, runName);
 
   if (isLoading) {
     return (

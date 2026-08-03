@@ -17,12 +17,14 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
 import { usePicking, type PickingTool } from "@/contexts/PickingContext";
+import { useProjectId } from "@/contexts/CopickContext";
 import { useUpdatePicks } from "@/api/hooks";
 import { rgbaToCss } from "@/utils/colorUtils";
 
 export function PickingToolbar() {
   const { state, setTool, stopEditing, markSaved, deleteSelectedPoints } =
     usePicking();
+  const projectId = useProjectId();
   const updatePicks = useUpdatePicks();
 
   const handleToolChange = (
@@ -38,6 +40,7 @@ export function PickingToolbar() {
     if (!state.editingPicks) return;
 
     await updatePicks.mutateAsync({
+      projectId,
       runName: state.editingPicks.runName,
       objectName: state.editingPicks.objectName,
       userId: state.editingPicks.userId,

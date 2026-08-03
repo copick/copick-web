@@ -32,7 +32,7 @@ import {
   useCreatePicks,
   useDeletePicks,
 } from "@/api/hooks";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
 import { rgbaToHex } from "@/utils/colorUtils";
 import { NewPickDialog } from "@/components/picking/NewPickDialog";
@@ -43,7 +43,8 @@ interface PicksPanelProps {
 }
 
 export function PicksPanel({ runName }: PicksPanelProps) {
-  const { data: picks, isLoading, error } = usePicks(runName);
+  const projectId = useProjectId();
+  const { data: picks, isLoading, error } = usePicks(projectId, runName);
   const { state, togglePickVisibility, addPick } = useCopick();
   const { state: pickingState, isEditing } = usePicking();
   const createPicks = useCreatePicks();
@@ -73,6 +74,7 @@ export function PicksPanel({ runName }: PicksPanelProps) {
     sessionId: string,
   ) => {
     await createPicks.mutateAsync({
+      projectId,
       runName,
       data: { object_name: objectName, user_id: userId, session_id: sessionId },
     });
@@ -83,6 +85,7 @@ export function PicksPanel({ runName }: PicksPanelProps) {
       window.confirm(`Delete picks for ${pick.object_name} by ${pick.user_id}?`)
     ) {
       await deletePicks.mutateAsync({
+        projectId,
         runName,
         objectName: pick.object_name,
         userId: pick.user_id,
@@ -223,8 +226,10 @@ function PickRow({
   onToggle,
   onDelete,
 }: PickRowProps) {
+  const projectId = useProjectId();
   const { startEditing } = usePicking();
   const { data: pickDetail } = usePickPoints(
+    projectId,
     runName,
     pick.object_name,
     pick.user_id,

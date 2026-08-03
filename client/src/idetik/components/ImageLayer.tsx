@@ -8,10 +8,8 @@ import {
 import { useEffect, useRef } from "react";
 import { Idetik } from "../Idetik";
 import { imageSourcePolicy } from "../policy";
-import { planeAxes } from "../orientation";
+import { indexToWorld, planeAxes, type DimensionLod } from "../orientation";
 import { calculateContrast, type Contrast } from "../contrastStats";
-
-type DimensionLod = { size: number; scale: number; translation: number };
 
 const DEFAULT_CONTRAST_LIMITS: [number, number] = [-3, 3];
 
@@ -22,12 +20,8 @@ interface ImageLayerProps {
   sliceIndex: number;
   color: string;
   contrastLimits: [number, number] | undefined;
-  onMaxSliceIndex?: (maxIndex: number | undefined) => void;
+  onSliceLod?: (lod: DimensionLod | null) => void;
   onAutoContrast?: (contrast: Contrast) => void;
-}
-
-function indexToWorld(index: number, lod: DimensionLod): number {
-  return lod.translation + index * lod.scale;
 }
 
 export function ImageLayer({
@@ -37,7 +31,7 @@ export function ImageLayer({
   sliceIndex,
   color,
   contrastLimits,
-  onMaxSliceIndex,
+  onSliceLod,
   onAutoContrast,
 }: ImageLayerProps) {
   const layerRef = useRef<CoreImageLayer | null>(null);
@@ -101,7 +95,7 @@ export function ImageLayer({
         );
       }
 
-      onMaxSliceIndex?.(sliceLod ? sliceLod.size - 1 : undefined);
+      onSliceLod?.(sliceLod);
 
       // only compute auto-contrast once per source, so switching the slice
       // orientation doesn't clobber user-adjusted contrast settings.
@@ -125,7 +119,7 @@ export function ImageLayer({
       sourceRef.current = null;
       sliceLodRef.current = null;
     };
-  }, [viewer, sourceUrl, onMaxSliceIndex, onAutoContrast]);
+  }, [viewer, sourceUrl, onSliceLod, onAutoContrast]);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -153,8 +147,8 @@ export function ImageLayer({
       viewer.frameTo([0, uLod.size * uLod.scale], [0, vLod.size * vLod.scale]);
     }
 
-    onMaxSliceIndex?.(sliceLod ? sliceLod.size - 1 : undefined);
-  }, [orientation, viewer, onMaxSliceIndex]);
+    onSliceLod?.(sliceLod);
+  }, [orientation, viewer, onSliceLod]);
 
   useEffect(() => {
     layerRef.current?.setChannelProps([

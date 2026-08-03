@@ -6,6 +6,11 @@ const apiProxyTarget = process.env.API_PROXY_TARGET || "http://localhost:8000";
 const hmrClientPort = process.env.VITE_HMR_CLIENT_PORT
   ? Number(process.env.VITE_HMR_CLIENT_PORT)
   : undefined;
+// Inotify events don't propagate from a macOS host bind-mount into the
+// Podman/Docker Linux VM, so Vite never sees file changes. Fall back to
+// polling whenever VITE_HMR_CLIENT_PORT is set (i.e., we're running inside
+// the dev container). Polling is too expensive to enable for native runs.
+const usePolling = hmrClientPort !== undefined;
 
 export default defineConfig({
   base: process.env.BASE_PATH ? `${process.env.BASE_PATH}/` : "/",
@@ -21,6 +26,7 @@ export default defineConfig({
   server: {
     port: 5173,
     hmr: hmrClientPort ? { clientPort: hmrClientPort } : undefined,
+    watch: usePolling ? { usePolling: true, interval: 200 } : undefined,
     proxy: {
       "/api": {
         target: apiProxyTarget,

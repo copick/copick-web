@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useSegmentations } from "@/api/hooks";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { rgbaToHex } from "@/utils/colorUtils";
 
 interface SegmentationsTableProps {
@@ -24,7 +24,12 @@ interface SegmentationsTableProps {
 }
 
 export function SegmentationsTable({ runName }: SegmentationsTableProps) {
-  const { data: segmentations, isLoading, error } = useSegmentations(runName);
+  const projectId = useProjectId();
+  const {
+    data: segmentations,
+    isLoading,
+    error,
+  } = useSegmentations(projectId, runName);
   const { state, toggleSegmentationVisibility, addSegmentation } = useCopick();
 
   if (isLoading) {

@@ -2,10 +2,11 @@
 
 from fastapi import APIRouter, Depends
 
+from ..dependencies import get_copick_service
 from ..models import ConfigResponse, PickableObjectResponse
-from ..services.copick_service import CopickService, get_copick_service
+from ..services.copick_service import CopickService
 
-router = APIRouter(prefix="/api", tags=["config"])
+router = APIRouter(prefix="/api/projects/{project_id}", tags=["config"])
 
 
 @router.get("/config", response_model=ConfigResponse)

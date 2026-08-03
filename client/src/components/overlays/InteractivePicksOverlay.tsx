@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { SliceOrientation } from "@idetik/core";
 import { Idetik } from "@/idetik/Idetik";
 import { PointsLayer } from "@/idetik/components/PointsLayer";
-import { useCopick } from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
 import { usePickPoints } from "@/api/hooks";
 
@@ -86,7 +86,9 @@ function ReadOnlyPicks({
   slicePosition: number;
 }) {
   const { state } = useCopick();
+  const projectId = useProjectId();
   const { data: picks } = usePickPoints(
+    projectId,
     state.selectedRunName,
     objectName,
     userId,
