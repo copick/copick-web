@@ -1,10 +1,9 @@
 """Runs, tomograms, picks, and segmentations routes."""
 
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from ..validation import validate_copick_name
 from ..models import (
     CreatePicksRequest,
     CreatePicksResponse,
@@ -20,18 +19,20 @@ from ..models import (
     VoxelSpacingSummaryResponse,
 )
 from ..services.copick_service import CopickService, get_copick_service
+from ..validation import validate_copick_name
 
 router = APIRouter(prefix="/api", tags=["runs"])
+ServiceDependency = Annotated[CopickService, Depends(get_copick_service)]
 
 
 @router.get("/runs", response_model=list[RunSummaryResponse])
-def get_runs(service: CopickService = Depends(get_copick_service)) -> list[RunSummaryResponse]:
+def get_runs(service: ServiceDependency) -> list[RunSummaryResponse]:
     """Get all runs."""
     return [RunSummaryResponse(name=name) for name in service.get_runs()]
 
 
 @router.get("/runs/{run_name}", response_model=RunDetailResponse)
-def get_run(run_name: str, service: CopickService = Depends(get_copick_service)) -> RunDetailResponse:
+def get_run(run_name: str, service: ServiceDependency) -> RunDetailResponse:
     """Get run details including voxel spacings and tomograms."""
     run = service.get_run(run_name)
     if not run:
@@ -51,7 +52,7 @@ def get_tomogram(
     voxel_size: float,
     tomo_type: str,
     request: Request,
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
 ) -> TomogramResponse:
     """Get tomogram details with zarr URL."""
     tomo = service.get_tomogram(run_name, voxel_size, tomo_type)
@@ -73,10 +74,10 @@ def get_tomogram(
 @router.get("/runs/{run_name}/picks", response_model=list[PicksSummaryResponse])
 def get_picks(
     run_name: str,
-    object_name: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
-    session_id: Optional[str] = Query(None),
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
+    object_name: Annotated[Optional[str], Query()] = None,
+    user_id: Annotated[Optional[str], Query()] = None,
+    session_id: Annotated[Optional[str], Query()] = None,
 ) -> list[PicksSummaryResponse]:
     """Get all picks for a run with optional filtering."""
     run = service.get_run(run_name)
@@ -110,7 +111,7 @@ def get_pick_points(
     object_name: str,
     user_id: str,
     session_id: str,
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
 ) -> PicksDetailResponse:
     """Get detailed picks with all points."""
     pick = service.get_pick(run_name, object_name, user_id, session_id)
@@ -151,7 +152,7 @@ def get_pick_points(
 def create_picks(
     run_name: str,
     request: CreatePicksRequest,
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
 ) -> CreatePicksResponse:
     """Create a new empty picks collection."""
     # Validate all name fields using copick rules
@@ -165,7 +166,7 @@ def create_picks(
             raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {error_msg}")
 
     try:
-        picks = service.create_picks(
+        service.create_picks(
             run_name,
             request.object_name,
             request.user_id,
@@ -181,7 +182,7 @@ def create_picks(
             color=color,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.put("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", response_model=PicksDetailResponse)
@@ -191,7 +192,7 @@ def update_picks(
     user_id: str,
     session_id: str,
     request: UpdatePicksRequest,
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
 ) -> PicksDetailResponse:
     """Update picks with new points."""
     # Check if picks are editable (session_id != "0")
@@ -226,7 +227,7 @@ def update_picks(
             ],
         )
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.delete("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", status_code=204)
@@ -235,7 +236,7 @@ def delete_picks(
     object_name: str,
     user_id: str,
     session_id: str,
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
 ):
     """Delete a picks collection."""
     # Check if picks are editable (session_id != "0")
@@ -245,7 +246,7 @@ def delete_picks(
     try:
         service.delete_picks_collection(run_name, object_name, user_id, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 # --- Segmentations endpoints ---
@@ -255,11 +256,11 @@ def delete_picks(
 def get_segmentations(
     run_name: str,
     request: Request,
-    name: Optional[str] = Query(None),
-    user_id: Optional[str] = Query(None),
-    session_id: Optional[str] = Query(None),
-    voxel_size: Optional[float] = Query(None),
-    service: CopickService = Depends(get_copick_service),
+    service: ServiceDependency,
+    name: Annotated[Optional[str], Query()] = None,
+    user_id: Annotated[Optional[str], Query()] = None,
+    session_id: Annotated[Optional[str], Query()] = None,
+    voxel_size: Annotated[Optional[float], Query()] = None,
 ) -> list[SegmentationSummaryResponse]:
     """Get all segmentations for a run with optional filtering."""
     run = service.get_run(run_name)
