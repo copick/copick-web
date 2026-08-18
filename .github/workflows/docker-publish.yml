@@ -1,9 +1,35 @@
 name: Build and Publish Docker Images
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      ref:
+        description: Immutable commit to build
+        required: true
+        type: string
+      version:
+        description: Exact application version
+        required: true
+        type: string
+      prerelease:
+        description: Publish the moving alpha tag instead of latest
+        required: true
+        type: boolean
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or tag to build
+        required: true
+        type: string
+      version:
+        description: Exact application version
+        required: true
+        type: string
+      prerelease:
+        description: Publish as an alpha without moving latest
+        required: true
+        default: true
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -17,6 +43,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve immutable commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -32,8 +64,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-server
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
+            type=raw,value=${{ inputs.version }}
+            type=raw,value=sha-${{ steps.commit.outputs.sha }}
+            type=raw,value=alpha,enable=${{ inputs.prerelease }}
+            type=raw,value=latest,enable=${{ !inputs.prerelease }}
 
       - uses: docker/build-push-action@v6
         with:
@@ -47,6 +81,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve immutable commit
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -62,8 +102,10 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-client
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha
+            type=raw,value=${{ inputs.version }}
+            type=raw,value=sha-${{ steps.commit.outputs.sha }}
+            type=raw,value=alpha,enable=${{ inputs.prerelease }}
+            type=raw,value=latest,enable=${{ !inputs.prerelease }}
 
       - uses: docker/build-push-action@v6
         with:

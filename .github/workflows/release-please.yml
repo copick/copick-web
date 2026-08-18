@@ -2,101 +2,84 @@ name: Create Release PRs
 
 on:
   workflow_dispatch:
+    inputs:
+      target_branch:
+        description: Branch to release
+        required: true
+        default: main
+        type: choice
+        options:
+          - main
+          - v2.0
   push:
     branches:
       - main
+      - v2.0
+
+env:
+  RELEASE_TARGET_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
 
 permissions:
   contents: write
   issues: write
+  packages: write
   pull-requests: write
 
 jobs:
   release-please:
+    if: github.event_name == 'workflow_dispatch' || github.event.created == false
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.target_branch || github.ref_name }}
       cancel-in-progress: true
 
     runs-on: ubuntu-latest
     steps:
-      - name: release please
-        uses: googleapis/release-please-action@v4
+      - name: Create or update the linked release PR
+        uses: googleapis/release-please-action@v5
         id: release
         with:
           manifest-file: ".release-please.manifest.json"
-          config-file: "release-please.config.json"
-          target-branch: "main"
+          config-file: ${{ env.RELEASE_TARGET_BRANCH == 'v2.0' && 'release-please.prerelease.config.json' || 'release-please.config.json' }}
+          target-branch: ${{ env.RELEASE_TARGET_BRANCH }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
     outputs:
-      paths_released: ${{ steps.release.outputs.paths_released }}
       server_release_created: ${{ steps.release.outputs['server--release_created'] }}
+      server_sha: ${{ steps.release.outputs['server--sha'] }}
+      server_version: ${{ steps.release.outputs['server--version'] }}
       client_release_created: ${{ steps.release.outputs['client--release_created'] }}
+      client_sha: ${{ steps.release.outputs['client--sha'] }}
+      client_version: ${{ steps.release.outputs['client--version'] }}
 
-  # publish-pypi-package:
-  #   name: Build and publish Python package to PyPI
-  #   runs-on: ubuntu-latest
-  #   needs: release-please
-  #   if: needs.release-please.outputs.server_release_created == 'true'
-  #   environment:
-  #     name: pypi
-  #     url: https://pypi.org/p/copick-web
-  #   permissions:
-  #     id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
-  #   steps:
-  #     - name: Checkout ref branch
-  #       uses: actions/checkout@v6
-  #       with:
-  #         ref: ${{ github.ref }}
-  #         fetch-depth: 0
-  #
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v7
-  #       with:
-  #         version: "0.7.13"
-  #         python-version: "3.12"
-  #
-  #     - name: build
-  #       run: |
-  #         cd server
-  #         uv build
-  #
-  #     - name: Publish distribution to PyPI
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: server/dist
+  validate-linked-release:
+    name: Validate linked release
+    needs: release-please
+    if: needs.release-please.outputs.server_release_created == 'true' || needs.release-please.outputs.client_release_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the server and client to release together
+        env:
+          SERVER_RELEASE_CREATED: ${{ needs.release-please.outputs.server_release_created }}
+          CLIENT_RELEASE_CREATED: ${{ needs.release-please.outputs.client_release_created }}
+          SERVER_SHA: ${{ needs.release-please.outputs.server_sha }}
+          CLIENT_SHA: ${{ needs.release-please.outputs.client_sha }}
+          SERVER_VERSION: ${{ needs.release-please.outputs.server_version }}
+          CLIENT_VERSION: ${{ needs.release-please.outputs.client_version }}
+        run: |
+          test "$SERVER_RELEASE_CREATED" = true
+          test "$CLIENT_RELEASE_CREATED" = true
+          test "$SERVER_SHA" = "$CLIENT_SHA"
+          test "$SERVER_VERSION" = "$CLIENT_VERSION"
 
-  # publish-npm-package:
-  #   name: Build and publish client to npm
-  #   runs-on: ubuntu-latest
-  #   needs: release-please
-  #   if: needs.release-please.outputs.client_release_created == 'true'
-  #   steps:
-  #     - name: Checkout ref branch
-  #       uses: actions/checkout@v6
-  #       with:
-  #         ref: ${{ github.ref }}
-  #         fetch-depth: 0
-  #
-  #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         registry-url: 'https://registry.npmjs.org'
-  #
-  #     - name: Install dependencies
-  #       run: |
-  #         cd client
-  #         npm ci
-  #
-  #     - name: Build
-  #       run: |
-  #         cd client
-  #         npm run build
-  #
-  #     - name: Publish to npm
-  #       run: |
-  #         cd client
-  #         npm publish
-  #       env:
-  #         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  publish-images:
+    name: Publish linked application images
+    needs: [release-please, validate-linked-release]
+    if: needs.validate-linked-release.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      ref: ${{ needs.release-please.outputs.server_sha }}
+      version: ${{ needs.release-please.outputs.server_version }}
+      prerelease: ${{ contains(needs.release-please.outputs.server_version, '-') }}

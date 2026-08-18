@@ -2,10 +2,11 @@ name: JavaScript/TypeScript Linting
 
 on:
   pull_request:
+    branches: [main, v2.0]
     paths:
       - 'client/**'
   push:
-    branches: [main]
+    branches: [main, v2.0]
     paths:
       - 'client/**'
 

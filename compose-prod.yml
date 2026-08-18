@@ -1,6 +1,6 @@
 services:
   server:
-    image: ghcr.io/copick/copick-web-server:latest
+    image: ghcr.io/copick/copick-web-server:${COPICK_WEB_VERSION:-latest}
     volumes:
       - ${COPICK_CONFIG_PATH:?Set COPICK_CONFIG_PATH in .env}:/data/copick_config.json:ro
       - ${COPICK_DATA_DIR:-./data}:/data/copick_data
@@ -12,7 +12,7 @@ services:
       - copick-net
 
   client:
-    image: ghcr.io/copick/copick-web-client:latest
+    image: ghcr.io/copick/copick-web-client:${COPICK_WEB_VERSION:-latest}
     ports:
       - "${SERVER_HOST_PORT:-8880}:80"
     environment:

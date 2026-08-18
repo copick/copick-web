@@ -1,0 +1,93 @@
+name: Migration Behavior
+
+on:
+  pull_request:
+    branches: [main, v2.0]
+  push:
+    branches: [main, v2.0]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  server-behavior:
+    name: Server behavior (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install server and test dependencies
+        run: python -m pip install -e './server[dev]'
+
+      - name: Run server behavior tests
+        run: pytest -q server/tests
+
+  client-behavior:
+    name: Client behavior (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20.19", "22"]
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install locked client dependencies
+        run: npm ci
+
+      - name: Run OME-Zarr behavior tests
+        run: npm test
+
+      - name: Build client
+        run: npm run build
+
+  server-behavior-gate:
+    name: Server behavior gate
+    if: always()
+    needs: server-behavior
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported Python version
+        run: test '${{ needs.server-behavior.result }}' = success
+
+  client-behavior-gate:
+    name: Client behavior gate
+    if: always()
+    needs: client-behavior
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every supported Node version
+        run: test '${{ needs.client-behavior.result }}' = success
+
+  migration-behavior-gate:
+    name: Migration behavior gate
+    if: always()
+    needs: [server-behavior-gate, client-behavior-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require server and client behavior
+        run: |
+          test '${{ needs.server-behavior-gate.result }}' = success
+          test '${{ needs.client-behavior-gate.result }}' = success

@@ -8,10 +8,7 @@ name: Docker Build Check
 
 on:
   pull_request:
-    paths:
-      - 'client/**'
-      - 'server/**'
-      - '.github/workflows/docker-build.yml'
+    branches: [main, v2.0]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -121,3 +118,14 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f copick-client 2>/dev/null || true
+
+  container-behavior-gate:
+    name: Container behavior gate
+    if: always()
+    needs: [build-server, build-client]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both production container smoke tests
+        run: |
+          test '${{ needs.build-server.result }}' = success
+          test '${{ needs.build-client.result }}' = success

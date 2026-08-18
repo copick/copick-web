@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     try:
         init_copick_service(settings.copick_config_path)
         logger.info("Copick service initialized successfully")
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         logger.error(f"Config file not found: {settings.copick_config_path}")
         raise
     except OSError as e:
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             f"Storage connection failed. Check that any required services (SSH tunnel, etc.) are running. "
             f"Error: {e}"
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Failed to initialize copick service: {e}")
         raise
@@ -61,6 +61,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Accept-Ranges", "Content-Length", "Content-Range"],
 )
 
 # Include API routers
