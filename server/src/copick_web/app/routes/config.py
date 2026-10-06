@@ -13,6 +13,7 @@ from ..models import (
     ObjectTypeRequest,
     ObjectTypesResponse,
     PickableObjectResponse,
+    ReloadResponse,
 )
 from ..services import compat
 from ..services.copick_service import CopickService, get_copick_service
@@ -39,6 +40,16 @@ def get_config(service: ServiceDependency) -> ConfigResponse:
         session_id=config.session_id,
         features=FeaturesResponse(**compat.features()),
     )
+
+
+@router.post("/reload", response_model=ReloadResponse)
+def reload_project(service: ServiceDependency) -> ReloadResponse:
+    """Re-open the project from its configuration file, so runs, tomograms and annotations added since show up."""
+    try:
+        runs = service.reload()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not reload the project: {e}") from e
+    return ReloadResponse(runs=runs)
 
 
 @router.get("/objects", response_model=list[PickableObjectResponse])

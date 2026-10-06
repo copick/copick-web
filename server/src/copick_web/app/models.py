@@ -78,6 +78,12 @@ class ObjectTypesResponse(BaseModel):
     objects: list[ObjectTypeFields]
 
 
+class ReloadResponse(BaseModel):
+    """The project after it was re-opened from its configuration file."""
+
+    runs: int
+
+
 class RunSummaryResponse(BaseModel):
     """Summary of a run."""
 
