@@ -49,9 +49,7 @@ class CopickService:
         self.root = copick.from_file(config_path)
         self.config_path = config_path
         self.object_types = ObjectTypesEditor(self.root, config_path)
-        self.thumbnails: BoundedCache = BoundedCache(
-            thumbnail_cache_bytes, cache_max_age, size_of=thumbnail_size
-        )
+        self.thumbnails: BoundedCache = BoundedCache(thumbnail_cache_bytes, cache_max_age, size_of=thumbnail_size)
         self._measurements: BoundedCache = BoundedCache(measurement_cache_bytes, cache_max_age)
 
     def sweep_caches(self) -> int:
@@ -547,7 +545,9 @@ def _boundary_voxels(array, panoptic: bool, slab: int = 32):
         normals = np.zeros(core.shape + (3,), dtype=np.int8)
         exposed = np.zeros(core.shape, dtype=bool)
         for dz, dy, dx in _FACES:
-            neighbour = keys[1 + dz : keys.shape[0] - 1 + dz, 1 + dy : keys.shape[1] - 1 + dy, 1 + dx : keys.shape[2] - 1 + dx]
+            neighbour = keys[
+                1 + dz : keys.shape[0] - 1 + dz, 1 + dy : keys.shape[1] - 1 + dy, 1 + dx : keys.shape[2] - 1 + dx
+            ]
             face = inside & (neighbour != core)
             exposed |= face
             normals[face] += np.array((dx, dy, dz), dtype=np.int8)

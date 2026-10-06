@@ -67,7 +67,9 @@ export function isPaneVisibility(value: unknown): value is boolean[] {
 
 /** Visible panes (XY, XZ, YZ, 3D); an all-hidden preference never traps the viewer. */
 export function readVisiblePanels(): boolean[] {
-  return readStored(VISIBILITY_KEY, isPaneVisibility, [...DEFAULT_VISIBLE_PANES]);
+  return readStored(VISIBILITY_KEY, isPaneVisibility, [
+    ...DEFAULT_VISIBLE_PANES,
+  ]);
 }
 
 export function saveVisiblePanels(value: boolean[]): void {

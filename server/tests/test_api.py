@@ -33,7 +33,7 @@ def test_objects_report_filament_spec(client):
 def test_pick_points_carry_transformations(client):
     body = client.get(PICKS_URL).json()
     assert len(body["points"]) == len(PICKS)
-    for point, (location, shift, instance_id, score) in zip(body["points"], PICKS):
+    for point, (location, shift, instance_id, score) in zip(body["points"], PICKS, strict=False):
         assert (point["x"], point["y"], point["z"]) == pytest.approx(location)
         assert np.asarray(point["transformation"])[:3, 3] == pytest.approx(shift)
         assert point["instance_id"] == instance_id
@@ -56,13 +56,13 @@ def test_saving_picks_keeps_transformations(client, service):
     stored = service.get_pick(RUN, "ribosome", "alice", "1")
     stored.load()
     assert len(stored.points) == len(PICKS) + 1
-    for point, (_, shift, _, _) in zip(stored.points, PICKS):
+    for point, (_, shift, _, _) in zip(stored.points, PICKS, strict=False):
         assert np.asarray(point.transformation)[:3, 3] == pytest.approx(shift)
     assert np.asarray(stored.points[-1].transformation) == pytest.approx(np.eye(4))
     assert stored.points[-1].instance_id == 7
     centre = compat.full_position(stored.points[0])
     location, shift = PICKS[0][0], PICKS[0][1]
-    assert centre == pytest.approx(tuple(a + b for a, b in zip(location, shift)))
+    assert centre == pytest.approx(tuple(a + b for a, b in zip(location, shift, strict=False)))
 
 
 def test_saving_picks_rejects_bad_transformations(client):
