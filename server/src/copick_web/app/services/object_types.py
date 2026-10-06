@@ -24,7 +24,17 @@ FILAMENT_KEY = "filament"
 #: Filament spec fields the form edits; other keys of a spec are kept.
 FILAMENT_FIELDS = ("polar", "helical_rise_a", "helical_twist_deg")
 #: Fields of a pickable object the form edits; everything else (metadata, fields of newer copick versions) is kept.
-EDITABLE_FIELDS = ("name", "is_particle", "label", "color", "emdb_id", "pdb_id", "identifier", "map_threshold", "radius")
+EDITABLE_FIELDS = (
+    "name",
+    "is_particle",
+    "label",
+    "color",
+    "emdb_id",
+    "pdb_id",
+    "identifier",
+    "map_threshold",
+    "radius",
+)
 
 
 class ObjectTypesConflict(Exception):

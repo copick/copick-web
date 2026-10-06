@@ -32,10 +32,10 @@ def _read_from_store(store, path: str) -> bytes:
         return bytes(data)
     except KeyError as e:
         logger.warning(f"Path '{path}' not found in store: {e}")
-        raise HTTPException(status_code=404, detail=f"Path '{path}' not found in store")
+        raise HTTPException(status_code=404, detail=f"Path '{path}' not found in store") from e
     except Exception as e:
         logger.error(f"Error reading '{path}' from store: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error reading from store: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reading from store: {e}") from e
 
 
 @router.get("/tomo/{run_name}/{voxel_size}/{tomo_type}/{path:path}")

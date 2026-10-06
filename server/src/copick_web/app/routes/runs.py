@@ -230,7 +230,7 @@ def create_picks(
             raise HTTPException(status_code=400, detail=f"Invalid {field_name}: {error_msg}")
 
     try:
-        picks = service.create_picks(
+        service.create_picks(
             run_name,
             request.object_name,
             request.user_id,
@@ -246,7 +246,7 @@ def create_picks(
             color=color,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.put("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", response_model=PicksDetailResponse)
@@ -303,7 +303,7 @@ def delete_picks(
     try:
         service.delete_picks_collection(run_name, object_name, user_id, session_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 # --- Segmentations endpoints ---

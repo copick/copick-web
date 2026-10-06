@@ -249,17 +249,37 @@ export interface FilamentSetKey {
 export function useSaveFilaments() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, data }: { key: FilamentSetKey; data: SaveFilamentsRequest }) =>
-      api.saveFilaments(key.runName, key.objectName, key.userId, key.sessionId, data),
+    mutationFn: ({
+      key,
+      data,
+    }: {
+      key: FilamentSetKey;
+      data: SaveFilamentsRequest;
+    }) =>
+      api.saveFilaments(
+        key.runName,
+        key.objectName,
+        key.userId,
+        key.sessionId,
+        data,
+      ),
     onSuccess: (result, { key, data }) => {
       queryClient.setQueryData(
-        ["filamentDetail", key.runName, key.objectName, key.userId, key.sessionId],
+        [
+          "filamentDetail",
+          key.runName,
+          key.objectName,
+          key.userId,
+          key.sessionId,
+        ],
         result.filaments,
       );
       queryClient.invalidateQueries({ queryKey: ["filaments", key.runName] });
       if (data.pick_spacing) {
         queryClient.invalidateQueries({ queryKey: ["picks", key.runName] });
-        queryClient.invalidateQueries({ queryKey: ["pickPoints", key.runName] });
+        queryClient.invalidateQueries({
+          queryKey: ["pickPoints", key.runName],
+        });
       }
     },
   });
@@ -269,10 +289,21 @@ export function useDeleteFilaments() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (key: FilamentSetKey) =>
-      api.deleteFilaments(key.runName, key.objectName, key.userId, key.sessionId),
+      api.deleteFilaments(
+        key.runName,
+        key.objectName,
+        key.userId,
+        key.sessionId,
+      ),
     onSuccess: (_, key) => {
       queryClient.removeQueries({
-        queryKey: ["filamentDetail", key.runName, key.objectName, key.userId, key.sessionId],
+        queryKey: [
+          "filamentDetail",
+          key.runName,
+          key.objectName,
+          key.userId,
+          key.sessionId,
+        ],
       });
       queryClient.invalidateQueries({ queryKey: ["filaments", key.runName] });
     },

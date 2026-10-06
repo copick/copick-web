@@ -41,7 +41,7 @@ async def lifespan(app: FastAPI):
         raise RuntimeError(
             f"Storage connection failed. Check that any required services (SSH tunnel, etc.) are running. "
             f"Error: {e}"
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Failed to initialize copick service: {e}")
         raise
