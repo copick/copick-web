@@ -189,6 +189,36 @@ async def proxy_tomogram_zarr(
     return await _serve_zarr_object(request, store, path)
 
 
+_SEG_TYPES = ("binary", "multilabel", "instance", "panoptic")
+
+
+@router.api_route(
+    "/segmentation/{seg_type}/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}/{path:path}",
+    methods=["GET", "HEAD"],
+)
+async def proxy_typed_segmentation_zarr(
+    request: Request,
+    seg_type: str,
+    run_name: str,
+    seg_name: str,
+    user_id: str,
+    session_id: str,
+    voxel_size: float,
+    path: str,
+    service: Annotated[CopickService, Depends(get_copick_service)],
+) -> Response:
+    """Proxy Zarr objects for a segmentation of a given type (the type is part of a segmentation's identity)."""
+    if seg_type not in _SEG_TYPES:
+        raise HTTPException(status_code=404, detail=f"Unknown segmentation type '{seg_type}'")
+    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size, seg_type)
+    if store is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{seg_type} segmentation '{seg_name}' not found for run '{run_name}'",
+        )
+    return await _serve_zarr_object(request, store, path)
+
+
 @router.api_route("/seg/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}/{path:path}", methods=["GET", "HEAD"])
 async def proxy_segmentation_zarr(
     request: Request,
@@ -200,7 +230,7 @@ async def proxy_segmentation_zarr(
     path: str,
     service: Annotated[CopickService, Depends(get_copick_service)],
 ) -> Response:
-    """Proxy Zarr objects for a segmentation."""
+    """Proxy Zarr objects for a segmentation (legacy alias: binary and multilabel only)."""
     store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size)
     if store is None:
         raise HTTPException(

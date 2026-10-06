@@ -1,160 +1,160 @@
+/**
+ * Pick overlays: read-only picks for every visible picks set, and the set
+ * being edited (from PickingContext). Points are drawn at their particle
+ * centre (location + transform translation). Filament objects, and sets with
+ * "colour by instance" on, colour each point by its instance ID with the
+ * shared instance palette.
+ */
+
 import { useMemo } from "react";
-import type { SliceOrientation } from "@idetik/core";
-import { Idetik } from "@/idetik/Idetik";
-import { PointsLayer } from "@/idetik/components/PointsLayer";
-import { useCopick } from "@/contexts/CopickContext";
-import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
-import { usePickPoints } from "@/api/hooks";
+import { useCopick, type PickSelection } from "@/contexts/CopickContext";
+import {
+  pointCentre,
+  usePicking,
+  type PickingPoint,
+} from "@/contexts/PickingContext";
+import { useLayout } from "@/contexts/LayoutContext";
+import { useScene } from "@/contexts/SceneContext";
+import { useObjects, usePickPoints } from "@/api/hooks";
+import type { PickableObjectResponse } from "@/api/types";
+import { angstromToWorld } from "@/idetik/coordinates";
+import type { MarkerPoint } from "@/idetik/PickMarkersLayer";
+import { instanceColor, type Rgba255 } from "@/utils/instanceColors";
+import { PickMarkers } from "./PickMarkers";
 
-const DEFAULT_POINT_SIZE_PIXELS = 30;
-const SELECTED_POINT_SIZE_PIXELS = 40; // larger for selected points
+const POINT_SIZE_PIXELS = 24;
+/** Filament picks are dense (one every few voxels along the axis): smaller dots keep them readable. */
+const FILAMENT_POINT_SIZE_PIXELS = 10;
 
-type Rgba = [number, number, number, number];
-
-interface InteractivePicksOverlayProps {
-  viewer: Idetik | null;
-  orientation: SliceOrientation;
-  sliceIndex: number;
-  voxelSpacing: number;
-}
-
-export function InteractivePicksOverlay({
-  viewer,
-  orientation,
-  sliceIndex,
-  voxelSpacing,
-}: InteractivePicksOverlayProps) {
+export function InteractivePicksOverlay() {
   const { state: copickState } = useCopick();
   const { state: pickingState, isEditing } = usePicking();
+  const { data: objects } = useObjects();
+  const { scene } = useScene();
 
-  const slicePosition = sliceIndex * voxelSpacing;
-  const visiblePicks = copickState.selectedPicks.filter((p) => p.visible);
+  if (!scene) return null;
 
-  if (!viewer) {
-    return null;
-  }
+  const editing = pickingState.editingPicks;
+  const visiblePicks = copickState.selectedPicks.filter(
+    (pick) =>
+      pick.visible &&
+      !(
+        isEditing &&
+        pick.objectName === editing?.objectName &&
+        pick.userId === editing?.userId &&
+        pick.sessionId === editing?.sessionId
+      ),
+  );
 
   return (
     <>
-      {visiblePicks
-        .filter(
-          (pick) =>
-            !isEditing ||
-            pick.objectName !== pickingState.editingPicks?.objectName ||
-            pick.userId !== pickingState.editingPicks?.userId ||
-            pick.sessionId !== pickingState.editingPicks?.sessionId,
-        )
-        .map((pick) => (
-          <ReadOnlyPicks
-            key={`${pick.objectName}-${pick.userId}-${pick.sessionId}`}
-            viewer={viewer}
-            objectName={pick.objectName}
-            userId={pick.userId}
-            sessionId={pick.sessionId}
-            orientation={orientation}
-            slicePosition={slicePosition}
-          />
-        ))}
-
-      {isEditing && pickingState.editingPicks && (
+      {visiblePicks.map((pick) => (
+        <ReadOnlyPicks
+          key={`${pick.objectName}-${pick.userId}-${pick.sessionId}`}
+          pick={pick}
+          object={objects?.find((o) => o.name === pick.objectName)}
+        />
+      ))}
+      {isEditing && editing && (
         <EditablePicks
-          viewer={viewer}
           points={pickingState.localPoints}
           selectedIds={pickingState.selectedPointIds}
-          color={pickingState.editingPicks.color}
-          orientation={orientation}
-          slicePosition={slicePosition}
+          color={editing.color}
+          byInstance={!!editing.isFilament}
+          object={objects?.find((o) => o.name === editing.objectName)}
         />
       )}
     </>
   );
 }
 
+function useMarkers(
+  points:
+    | (
+        | PickingPoint
+        | {
+            x: number;
+            y: number;
+            z: number;
+            instance_id: number | null;
+            transformation?: number[][] | null;
+            id?: string;
+          }
+      )[]
+    | undefined,
+  color: Rgba255 | undefined,
+  byInstance: boolean,
+  selectedIds?: Set<string>,
+): MarkerPoint[] {
+  const { scene } = useScene();
+  const perUnit = scene?.geometry.angstromPerUnit ?? 1;
+  return useMemo(() => {
+    if (!points || !color) return [];
+    return points.map((p) => ({
+      position: angstromToWorld(pointCentre(p), perUnit),
+      color: byInstance ? instanceColor(p.instance_id, color) : color,
+      selected: !!(selectedIds && "id" in p && p.id && selectedIds.has(p.id)),
+    }));
+  }, [points, color, byInstance, selectedIds, perUnit]);
+}
+
 function ReadOnlyPicks({
-  viewer,
-  objectName,
-  userId,
-  sessionId,
-  orientation,
-  slicePosition,
+  pick,
+  object,
 }: {
-  viewer: Idetik;
-  objectName: string;
-  userId: string;
-  sessionId: string;
-  orientation: SliceOrientation;
-  slicePosition: number;
+  pick: PickSelection;
+  object: PickableObjectResponse | undefined;
 }) {
   const { state } = useCopick();
-  const { data: picks } = usePickPoints(
+  const { markerStyle } = useLayout();
+  const { data } = usePickPoints(
     state.selectedRunName,
-    objectName,
-    userId,
-    sessionId,
+    pick.objectName,
+    pick.userId,
+    pick.sessionId,
   );
+  const byInstance =
+    pick.colorByInstance ?? (data?.is_filament || !!object?.is_filament);
+  const markers = useMarkers(data?.points, data?.color, byInstance);
   return (
-    <PointsLayer
-      viewer={viewer}
-      points={picks?.points}
-      color={picks?.color}
-      pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
-      orientation={orientation}
-      slicePosition={slicePosition}
+    <PickMarkers
+      id={`picks:${pick.objectName}:${pick.userId}:${pick.sessionId}`}
+      markers={markers}
+      style={markerStyle}
+      radiusAngstrom={object?.radius ?? null}
+      pointSizePixels={
+        data?.is_filament || object?.is_filament
+          ? FILAMENT_POINT_SIZE_PIXELS
+          : POINT_SIZE_PIXELS
+      }
     />
   );
 }
 
 function EditablePicks({
-  viewer,
   points,
   selectedIds,
   color,
-  orientation,
-  slicePosition,
+  byInstance,
+  object,
 }: {
-  viewer: Idetik;
   points: PickingPoint[];
   selectedIds: Set<string>;
-  color: Rgba;
-  orientation: SliceOrientation;
-  slicePosition: number;
+  color: Rgba255;
+  byInstance: boolean;
+  object: PickableObjectResponse | undefined;
 }) {
-  const normalPoints = useMemo(
-    () => points.filter((p) => !selectedIds.has(p.id)),
-    [points, selectedIds],
-  );
-  const selectedPoints = useMemo(
-    () => points.filter((p) => selectedIds.has(p.id)),
-    [points, selectedIds],
-  );
-  const highlightColor = useMemo<Rgba>(
-    () => [
-      Math.min(255, color[0] + 80),
-      Math.min(255, color[1] + 80),
-      Math.min(255, color[2] + 80),
-      255,
-    ],
-    [color],
-  );
-
+  const { markerStyle } = useLayout();
+  const markers = useMarkers(points, color, byInstance, selectedIds);
   return (
-    <>
-      <PointsLayer
-        viewer={viewer}
-        points={normalPoints}
-        color={color}
-        pointSizePixels={DEFAULT_POINT_SIZE_PIXELS}
-        orientation={orientation}
-        slicePosition={slicePosition}
-      />
-      <PointsLayer
-        viewer={viewer}
-        points={selectedPoints}
-        color={highlightColor}
-        pointSizePixels={SELECTED_POINT_SIZE_PIXELS}
-        orientation={orientation}
-        slicePosition={slicePosition}
-      />
-    </>
+    <PickMarkers
+      id="picks:editing"
+      markers={markers}
+      style={markerStyle}
+      radiusAngstrom={object?.radius ?? null}
+      pointSizePixels={
+        byInstance ? FILAMENT_POINT_SIZE_PIXELS : POINT_SIZE_PIXELS
+      }
+    />
   );
 }
