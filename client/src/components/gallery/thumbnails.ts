@@ -3,7 +3,8 @@
  * scroll into view), a few at a time, and kept so the gallery reopens
  * instantly. The kept thumbnails are bounded: at most MAX_ENTRIES, none older
  * than MAX_AGE_MS (swept every SWEEP_MS); dropped ones release their blob URL
- * and are fetched again if a card still needs them.
+ * and are fetched again if a card still needs them. Reloading the project
+ * clears them all (clearThumbnails).
  */
 
 import { useSyncExternalStore } from "react";
@@ -72,6 +73,14 @@ export class ThumbnailStore {
     return dropped;
   }
 
+  /** Drop every thumbnail (loading ones too); returns how many. */
+  clear(): number {
+    const dropped = this.items.size;
+    for (const run of [...this.items.keys()]) this.drop(run);
+    if (dropped) this.notify();
+    return dropped;
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -99,6 +108,8 @@ export class ThumbnailStore {
 const store = new ThumbnailStore();
 const queue: string[] = [];
 let inFlight = 0;
+/** Bumped by clearThumbnails: responses to requests made before are dropped. */
+let generation = 0;
 
 if (typeof window !== "undefined")
   window.setInterval(() => store.sweep(), SWEEP_MS);
@@ -106,6 +117,7 @@ if (typeof window !== "undefined")
 function pump() {
   while (inFlight < MAX_IN_FLIGHT && queue.length) {
     const run = queue.shift()!;
+    const requested = generation;
     inFlight++;
     fetch(
       `${API_BASE}/runs/${encodeURIComponent(run)}/thumbnail?size=${THUMBNAIL_SIZE}`,
@@ -115,6 +127,7 @@ function pump() {
         if (!response.ok)
           throw new Error(`Preview unavailable (${response.status})`);
         const blob = await response.blob();
+        if (requested !== generation) return;
         store.set(run, {
           state: "ready",
           url: URL.createObjectURL(blob),
@@ -122,17 +135,25 @@ function pump() {
           voxelSize: Number(response.headers.get("X-Copick-Voxel-Size")),
         });
       })
-      .catch((e: unknown) =>
+      .catch((e: unknown) => {
+        if (requested !== generation) return;
         store.set(run, {
           state: "error",
           message: e instanceof Error ? e.message : String(e),
-        }),
-      )
+        });
+      })
       .finally(() => {
         inFlight--;
         pump();
       });
   }
+}
+
+/** Forget every thumbnail (the project was reloaded): cards in view ask again. */
+export function clearThumbnails(): void {
+  generation++;
+  queue.length = 0;
+  store.clear();
 }
 
 /** Ask for a run's thumbnail (once while it is kept; later calls are no-ops). */
