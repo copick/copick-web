@@ -8,7 +8,7 @@ created OME-Zarr 0.5 / Zarr v3 datasets in the same application build.
 
 - Server: Python 3.11, 3.12, 3.13, and 3.14.
 - Client development and CI: Node.js 20.19 or Node.js 22.
-- Core: `copick>=2.0.0a1,<2.1`.
+- Core: `copick>=2.0.0a3,<2.1`.
 - Store API: `zarr>=3.1.6,<4` asynchronous `Store` contract.
 - Browser reader: the locked `@idetik/core` 0.35 / Zarrita 0.7 line.
 
