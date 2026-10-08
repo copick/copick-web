@@ -60,6 +60,7 @@ Options:
   --host TEXT     Host to bind to (default: 127.0.0.1)
   --port INTEGER  Port to bind to (default: 8000)
   --no-browser    Don't open browser automatically
+  --base-path TEXT  URL prefix of a proxy that forwards the full path (env: BASE_PATH)
   --help          Show this message and exit.
 
 Examples:
@@ -67,6 +68,26 @@ Examples:
   copick-web config.json --port 9000        # Custom port
   copick-web config.json --no-browser       # Don't auto-open browser
 ```
+
+### Behind a proxy (e.g. Open OnDemand)
+
+The client finds its URL prefix at runtime from the page it was loaded from, so the same install works under any
+prefix — for example a different `/rnode/<host>/<port>/` for every node and port an HPC job lands on. Open the URL
+with its trailing slash.
+
+- **The proxy strips the prefix** (Open OnDemand's `/rnode/<host>/<port>/`): nothing to set.
+
+  ```bash
+  copick-web config.json --host 0.0.0.0 --port "$port" --no-browser
+  # open https://ondemand.example.org/rnode/$(hostname)/$port/
+  ```
+
+- **The proxy forwards the full path** (Open OnDemand's `/node/<host>/<port>/`): pass the prefix with
+  `--base-path` (or `BASE_PATH`). Requests with or without it are served alike.
+
+  ```bash
+  copick-web config.json --host 0.0.0.0 --port "$port" --no-browser --base-path "/node/$(hostname)/$port"
+  ```
 
 ## Development
 

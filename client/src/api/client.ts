@@ -27,7 +27,25 @@ import type {
 } from "./types";
 import { decodeSurfacePoints, type SurfacePoints } from "@/utils/surfacePoints";
 
-export const API_BASE = `${import.meta.env.BASE_URL}api`;
+/**
+ * Where the app is served from, found at runtime from the page URL (the app has no client-side routes, so the page
+ * is always the app root): one build runs under any URL prefix, such as Open OnDemand's /rnode/<host>/<port>/.
+ */
+export const APP_BASE = appBaseOf(
+  typeof document === "undefined" ? "http://localhost/" : document.baseURI,
+);
+
+/** The app root for a page URL: its directory (the page is the root, with or without `index.html`). */
+export function appBaseOf(pageUrl: string): URL {
+  return new URL(".", pageUrl);
+}
+
+/** Absolute URL of a path relative to the app root (e.g. the `zarr_url` of a tomogram); a leading slash is ignored. */
+export function appUrl(path: string, base: URL = APP_BASE): string {
+  return new URL(path.replace(/^\/+/, ""), base).href;
+}
+
+export const API_BASE = appUrl("api");
 
 const enc = encodeURIComponent;
 

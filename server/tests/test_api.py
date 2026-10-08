@@ -84,7 +84,7 @@ def test_segmentations_list_types_and_typed_urls(client):
     assert by_type["binary"]["channels"] is None
     # The binary and the instance segmentation share name, user, session and voxel size: the type disambiguates.
     assert by_type["binary"]["zarr_url"] != by_type["instance"]["zarr_url"]
-    assert "/zarr/segmentation/instance/" in by_type["instance"]["zarr_url"]
+    assert by_type["instance"]["zarr_url"].startswith("zarr/segmentation/instance/")  # relative to the app root
 
     only = client.get(f"/api/runs/{RUN}/segmentations", params={"segmentation_type": "instance"}).json()
     assert [s["segmentation_type"] for s in only] == ["instance"]
