@@ -4,6 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
+import { clearThumbnails } from "@/components/gallery/thumbnails";
 import type {
   CreatePicksRequest,
   ObjectTypeFields,
@@ -59,6 +60,22 @@ export function useEditObjectType() {
             String(q.queryKey[0]),
           ),
       });
+    },
+  });
+}
+
+/**
+ * Reload the project (new runs, tomograms and annotations written by other tools): the server re-opens it, then
+ * everything is fetched again; the mutation is pending until what is shown has been fetched. Edits in progress are
+ * kept: they hold their own copy of what they edit.
+ */
+export function useReloadProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: api.reloadProject,
+    onSuccess: () => {
+      clearThumbnails();
+      return queryClient.invalidateQueries();
     },
   });
 }

@@ -59,4 +59,18 @@ describe("gallery thumbnail store", () => {
     expect(released).toEqual(["blob:1"]);
     expect(notified).toBe(2);
   });
+
+  test("clear drops every thumbnail, loading ones too, and releases the URLs", () => {
+    const { store, released } = setup();
+    let notified = 0;
+    store.set("a", ready("blob:a"));
+    store.set("b", { state: "loading" });
+    store.subscribe(() => notified++);
+    expect(store.clear()).toBe(2);
+    expect(store.size).toBe(0);
+    expect(released).toEqual(["blob:a"]);
+    expect(notified).toBe(1);
+    expect(store.clear()).toBe(0);
+    expect(notified).toBe(1);
+  });
 });
