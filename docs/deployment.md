@@ -30,6 +30,7 @@ Edit `.env` to point to your copick config and data:
 ```bash
 # .env
 SERVER_HOST_PORT=8880
+COPICK_WEB_VERSION=2.0.0-alpha.1
 COPICK_CONFIG_PATH=/path/to/your/copick_config.json
 COPICK_DATA_DIR=/path/to/your/copick/data
 BASE_PATH=
@@ -37,6 +38,11 @@ BASE_PATH=
 
 > **Important:** Paths inside your `copick_config.json` must reference `/data/copick_data`
 > since that is where `COPICK_DATA_DIR` is mounted inside the container.
+
+Use the same exact `COPICK_WEB_VERSION` for the server and client images.
+Alpha deployments must use an immutable `2.0.0-alpha.N` tag. The moving
+`alpha` tag is convenient for disposable testing, but is not reproducible;
+`latest` is reserved for stable releases.
 
 ### 4. Start the service
 
@@ -61,6 +67,24 @@ Pull the latest images and restart:
 podman compose -f compose-prod.yml pull
 podman compose -f compose-prod.yml up -d
 ```
+
+For a controlled upgrade, edit `COPICK_WEB_VERSION` to the new exact version,
+then run the same two commands. Server and client versions must never differ.
+
+## Rollback
+
+Restore the previously tested exact `COPICK_WEB_VERSION`, then pull and recreate
+the pair:
+
+```bash
+podman compose -f compose-prod.yml pull
+podman compose -f compose-prod.yml up -d
+podman compose -f compose-prod.yml ps
+```
+
+The application is read-only at its Zarr boundary, so rolling back copick-web
+does not rewrite datasets. A rollback must target a version that supports the
+formats present in the configured project.
 
 ## Running behind a reverse proxy
 

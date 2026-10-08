@@ -12,6 +12,13 @@
     { "type": "build", "section": "Build System" },
     { "type": "ci", "section": "Continuous Integration" }
   ],
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "copick-web",
+      "components": ["server", "client"]
+    }
+  ],
   "packages": {
     "server": {
       "package-name": "copick-web",

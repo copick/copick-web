@@ -8,7 +8,7 @@ Web-based visualization tool for cryoET data using the copick data model.
 
 copick-web consists of two components:
 
-- **Server**: Python FastAPI server that provides a REST API for copick metadata and proxies zarr data
+- **Server**: Python FastAPI server that provides a REST API for copick metadata and proxies Zarr data
 - **Client**: React/TypeScript application using idetik-react for OME-Zarr visualization
 
 ## Features
@@ -20,7 +20,7 @@ copick-web consists of two components:
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.11+
 - Node.js 20.19.0+
 - A copick configuration file pointing to your data
 
@@ -71,7 +71,7 @@ We offer dev containers for ease of use or manual dev setups.
 
 ### Docker/Podman Compose
 Pre-requisites: Podman (recommended) or Docker installed with Compose extension. Check if installed with `docker-compose version` or `podman compose version`
-- create .env file using .env.example as template. 
+- create .env file using .env.example as template.
 - obtain or use a copick project. Modify config.json's `overlay_root` parameter to `local:/data/copick_data/`
 ```
 # Example .env
@@ -140,10 +140,12 @@ When developing the client, run the server separately and the Vite dev server wi
 cd server
 black src/
 ruff check src/
+pytest -q tests/
 
 # Client
 cd client
 npm run lint
+npm test
 npm run format
 ```
 
@@ -174,8 +176,14 @@ Create a `.env` file in the `server/` directory to set these values.
 
 ### Zarr Proxy
 
-- `GET /zarr/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
-- `GET /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
+- `GET|HEAD /zarr/tomo/{run}/{vs}/{type}/{path}` - Tomogram Zarr objects
+- `GET|HEAD /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation Zarr objects
+
+The proxy reads the asynchronous Zarr 3 Store returned by copick 2.0. It
+supports full responses and one `bytes` range (`start-end`, `start-`, or
+`-suffix`) without downloading and slicing an entire shard in the web server.
+Both legacy OME-Zarr 0.4 / Zarr v2 and OME-Zarr 0.5 / Zarr v3 are supported.
+See [format and release compatibility](docs/zarr-v3-compatibility.md).
 
 ## Architecture
 

@@ -1,15 +1,18 @@
 """Configuration and objects routes."""
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends
 
 from ..models import ConfigResponse, PickableObjectResponse
 from ..services.copick_service import CopickService, get_copick_service
 
 router = APIRouter(prefix="/api", tags=["config"])
+ServiceDependency = Annotated[CopickService, Depends(get_copick_service)]
 
 
 @router.get("/config", response_model=ConfigResponse)
-def get_config(service: CopickService = Depends(get_copick_service)) -> ConfigResponse:
+def get_config(service: ServiceDependency) -> ConfigResponse:
     """Get project configuration."""
     config = service.config
     return ConfigResponse(
@@ -22,7 +25,7 @@ def get_config(service: CopickService = Depends(get_copick_service)) -> ConfigRe
 
 
 @router.get("/objects", response_model=list[PickableObjectResponse])
-def get_objects(service: CopickService = Depends(get_copick_service)) -> list[PickableObjectResponse]:
+def get_objects(service: ServiceDependency) -> list[PickableObjectResponse]:
     """Get all pickable objects."""
     return [
         PickableObjectResponse(
