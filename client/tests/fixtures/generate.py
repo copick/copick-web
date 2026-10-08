@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import zarr
 
-from copick.util.ome import write_ome_zarr_3d
+from copick.util.ome import write_ome_zarr, write_ome_zarr_3d
 
 ROOT = Path(__file__).parent
 SHAPE = (4, 5, 6)
@@ -70,6 +70,27 @@ def _write_v3(name: str, values: np.ndarray) -> None:
     write_ome_zarr_3d(str(path), {10.0: values}, chunk_size=CHUNKS)
 
 
+def panoptic_values() -> np.ndarray:
+    """A (2, Z, Y, X) panoptic volume: channel 0 the object label, channel 1 the instance ID."""
+    z, y, x = np.indices(SHAPE)
+    labels = np.where(x < 3, 1, 2).astype(np.uint16)
+    instances = np.where(labels == 1, 1 + (z * 30 + y * 6 + x) % 7, 0).astype(np.uint16)
+    return np.stack([labels, instances])
+
+
+def _write_v3_panoptic() -> None:
+    """A sharded, 2-channel OME-Zarr 0.5 / Zarr v3 panoptic segmentation, laid out as copick 2.0 writes one."""
+    path = ROOT / "v3-panoptic.zarr"
+    _reset(path)
+    write_ome_zarr(
+        str(path),
+        {10.0: panoptic_values()},
+        axes=[{"name": "c", "type": "channel"}, *_axes()],
+        chunk_size=(1, *CHUNKS),
+        metadata={"copick": {"segmentation_type": "panoptic", "channels": ["label", "instance"]}},
+    )
+
+
 def _normalize_metadata_newlines() -> None:
     metadata_names = {".zarray", ".zattrs", ".zgroup", "zarr.json"}
     for path in ROOT.rglob("*"):
@@ -90,4 +111,5 @@ if __name__ == "__main__":
         "v3-floating.zarr",
         (0.5 * indices[0] - 0.25 * indices[1] + 0.125 * indices[2]).astype(np.float32),
     )
+    _write_v3_panoptic()
     _normalize_metadata_newlines()

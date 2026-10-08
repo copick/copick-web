@@ -2,13 +2,17 @@
  * Sidebar with navigation tree and entity tables.
  */
 
-import { Box, Typography, Divider } from "@mui/material";
+import { useState } from "react";
+import { Box, Typography, Divider, IconButton, Tooltip } from "@mui/material";
+import { Category as ObjectTypesIcon } from "@mui/icons-material";
 import { useConfig } from "@/api/hooks";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
+import { ObjectTypesDialog } from "@/components/config/ObjectTypesDialog";
 
 export function Sidebar() {
   const { data: config } = useConfig();
+  const [objectTypesOpen, setObjectTypesOpen] = useState(false);
 
   return (
     <Box
@@ -28,12 +32,27 @@ export function Sidebar() {
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
-          <Typography variant="h6" noWrap>
+          <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
             {config?.name ?? "Copick Web"}
           </Typography>
+          <Tooltip title="Object types: names, colours, labels…">
+            <IconButton
+              size="small"
+              aria-label="Edit object types"
+              onClick={() => setObjectTypesOpen(true)}
+            >
+              <ObjectTypesIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
         {config?.description && (
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            title={config.description}
+            sx={{ display: "block" }}
+          >
             {config.description}
           </Typography>
         )}
@@ -53,6 +72,11 @@ export function Sidebar() {
       </Box>
 
       <Divider />
+
+      <ObjectTypesDialog
+        open={objectTypesOpen}
+        onClose={() => setObjectTypesOpen(false)}
+      />
 
       {/* Entity tabs */}
       <Box sx={{ flexShrink: 0, height: "50%", overflow: "auto" }}>

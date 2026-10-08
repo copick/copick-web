@@ -15,8 +15,11 @@ copick-web consists of two components:
 
 - Browse copick runs, voxel spacings, and tomograms
 - View tomogram slices with channel controls and scale bar
-- Display particle picks as point overlays
-- View segmentation overlays with multilabel support
+- Linked XY / XZ / YZ orthoslices with crosshairs and a 3D volume view (or a single plane), panes toggleable
+- Display particle picks as point overlays (dots or physical radius shells), coloured per instance ID for filament objects
+- Filaments (ordered centrelines) drawn as dense points, coloured per filament ID
+- Segmentation overlays: binary, multilabel, instance (shared instance palette, click to identify, instance browser) and panoptic (objects / instances / both)
+- Newer copick features (filaments, instance and panoptic segmentations) are detected at runtime; older copick versions keep working
 
 ## Prerequisites
 
@@ -172,12 +175,16 @@ Create a `.env` file in the `server/` directory to set these values.
 - `GET /api/runs/{run}` - Run details with voxel spacings
 - `GET /api/runs/{run}/picks` - List of picks for a run
 - `GET /api/runs/{run}/picks/{obj}/{user}/{session}` - Pick points
-- `GET /api/runs/{run}/segmentations` - List of segmentations
+- `GET /api/runs/{run}/segmentations` - List of segmentations (with `segmentation_type`; filter with `?segmentation_type=`)
+- `GET /api/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/instances?level=1` - Instance voxel counts and centroids (instance / panoptic)
+- `GET /api/runs/{run}/filaments` - Filament sets (empty on a copick without filaments)
+- `GET /api/runs/{run}/filaments/{obj}/{user}/{session}` - Filament centrelines (501 on a copick without filaments)
 
 ### Zarr Proxy
 
 - `GET|HEAD /zarr/tomo/{run}/{vs}/{type}/{path}` - Tomogram Zarr objects
-- `GET|HEAD /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation Zarr objects
+- `GET|HEAD /zarr/segmentation/{type}/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation Zarr objects (`type`: binary, multilabel, instance, panoptic)
+- `GET|HEAD /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Legacy alias (binary and multilabel only)
 
 The proxy reads the asynchronous Zarr 3 Store returned by copick 2.0. It
 supports full responses and one `bytes` range (`start-end`, `start-`, or

@@ -1,0 +1,60 @@
+{
+  "attributes": {
+    "ome": {
+      "version": "0.5",
+      "multiscales": [
+        {
+          "datasets": [
+            {
+              "path": "0",
+              "coordinateTransformations": [
+                {
+                  "scale": [
+                    1.0,
+                    10.0,
+                    10.0,
+                    10.0
+                  ],
+                  "type": "scale"
+                }
+              ]
+            }
+          ],
+          "name": "/",
+          "metadata": {
+            "copick": {
+              "segmentation_type": "panoptic",
+              "channels": [
+                "label",
+                "instance"
+              ]
+            }
+          },
+          "axes": [
+            {
+              "name": "c",
+              "type": "channel"
+            },
+            {
+              "name": "z",
+              "type": "space",
+              "unit": "angstrom"
+            },
+            {
+              "name": "y",
+              "type": "space",
+              "unit": "angstrom"
+            },
+            {
+              "name": "x",
+              "type": "space",
+              "unit": "angstrom"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "zarr_format": 3,
+  "node_type": "group"
+}

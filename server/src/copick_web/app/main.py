@@ -1,5 +1,6 @@
 """FastAPI application entry point."""
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routes import config, runs, zarr_proxy
-from .services.copick_service import init_copick_service
+from .routes import config, filaments, runs, zarr_proxy
+from .services.copick_service import get_copick_service, init_copick_service
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -22,7 +23,12 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info(f"Loading copick config from: {settings.copick_config_path}")
     try:
-        init_copick_service(settings.copick_config_path)
+        init_copick_service(
+            settings.copick_config_path,
+            thumbnail_cache_bytes=settings.thumbnail_cache_mb * 1024 * 1024,
+            measurement_cache_bytes=settings.measurement_cache_mb * 1024 * 1024,
+            cache_max_age=settings.cache_max_age_seconds or None,
+        )
         logger.info("Copick service initialized successfully")
     except FileNotFoundError:
         logger.error(f"Config file not found: {settings.copick_config_path}")
@@ -40,10 +46,25 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize copick service: {e}")
         raise
 
+    sweeper = asyncio.create_task(_sweep_caches(settings.cache_sweep_seconds))
+
     yield
 
     # Shutdown
+    sweeper.cancel()
     logger.info("Shutting down copick-web server")
+
+
+async def _sweep_caches(every: float) -> None:
+    """Drop expired cache entries regularly, so memory is released even when nothing is requested."""
+    while True:
+        await asyncio.sleep(max(every, 1))
+        try:
+            dropped = get_copick_service().sweep_caches()
+            if dropped:
+                logger.info(f"Dropped {dropped} expired cache entries")
+        except Exception as e:  # never let the sweeper die
+            logger.warning(f"Cache sweep failed: {e}")
 
 
 app = FastAPI(
@@ -67,6 +88,7 @@ app.add_middleware(
 # Include API routers
 app.include_router(config.router)
 app.include_router(runs.router)
+app.include_router(filaments.router)
 app.include_router(zarr_proxy.router)
 
 

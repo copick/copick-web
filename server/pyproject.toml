@@ -12,7 +12,7 @@ dependencies = [
     "uvicorn>=0.25.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.0.0",
-    "copick>=2.0.0a1,<2.1",
+    "copick>=2.0.0a3,<2.1",
     # The proxy constructs native byte-range requests and response buffers
     # against the public asynchronous Store API.
     "zarr>=3.1.6,<4",

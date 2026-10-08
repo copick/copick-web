@@ -1,111 +1,206 @@
 /**
- * Viewer controls: axis selector and slice slider.
- *
- * Slice index is passed via props (not context) to ensure direct state flow
- * and avoid race conditions. Axis selection still uses context.
+ * Viewer controls: Single / Multi layout, the single-plane axis (as before),
+ * which panes the multi layout shows, the pick marker style, and slice sliders
+ * (one in single-plane mode, X/Y/Z in multi mode).
  */
 
 import {
+  Button,
   Box,
+  Checkbox,
+  FormControlLabel,
+  IconButton,
   Slider,
-  Typography,
-  ToggleButtonGroup,
   ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
 } from "@mui/material";
-import { useViewer, type ViewAxis } from "@/contexts/ViewerContext";
+import {
+  CenterFocusStrong,
+  GridView as GalleryIcon,
+} from "@mui/icons-material";
+import { useNavigation } from "@/contexts/NavigationContext";
+import {
+  useLayout,
+  type LayoutMode,
+  type ViewAxis,
+} from "@/contexts/LayoutContext";
+import { useScene } from "@/contexts/SceneContext";
+import { useSlice } from "@/contexts/SliceContext";
+import { AXES, VIEW_IDS, indexToWorld } from "@/idetik/coordinates";
+import type { MarkerStyle } from "@/idetik/PickMarkersLayer";
 
-const SLICE_AXIS_LABEL: Record<ViewAxis, string> = {
-  xy: "Z",
-  xz: "Y",
-  yz: "X",
-};
+/** Slice axis (XYZ index) of each single-plane axis. */
+const SLICE_AXIS: Record<ViewAxis, number> = { xy: 2, xz: 1, yz: 0 };
 
 interface ViewerControlsProps {
-  sliceIndex: number;
-  maxSliceIndex: number | undefined;
-  onSliceIndexChange: (newIndex: number) => void;
+  onResetViews: () => void;
 }
 
-export function ViewerControls({
-  sliceIndex,
-  maxSliceIndex,
-  onSliceIndexChange,
-}: ViewerControlsProps) {
-  // Axis selection still uses context (independent of slice-index issues)
-  const { state, setAxis } = useViewer();
-
-  const handleAxisChange = (
-    _: React.MouseEvent<HTMLElement>,
-    newAxis: ViewAxis | null,
-  ) => {
-    if (newAxis) {
-      setAxis(newAxis);
-    }
-  };
-
-  const handleSliceChange = (_: Event, value: number | number[]) => {
-    // Use prop callback directly - no context involved
-    onSliceIndexChange(value as number);
-  };
+export function ViewerControls({ onResetViews }: ViewerControlsProps) {
+  const layout = useLayout();
+  const { scene } = useScene();
+  const { indices, setIndex } = useSlice();
+  const { showGallery } = useNavigation();
+  const geometry = scene?.geometry ?? null;
+  const sliderAxes =
+    layout.mode === "single" ? [SLICE_AXIS[layout.axis]] : [0, 1, 2];
 
   return (
     <Box
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: 2,
-        p: 1,
+        flexWrap: "wrap",
+        columnGap: 2,
+        rowGap: 0.5,
+        px: 1,
+        py: 0.5,
         borderBottom: 1,
         borderColor: "divider",
         backgroundColor: "background.paper",
       }}
     >
-      {/* Axis selector - uses context */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          View:
-        </Typography>
-        <ToggleButtonGroup
-          value={state.axis}
-          exclusive
-          onChange={handleAxisChange}
+      <Tooltip title="Back to the run gallery">
+        <Button
           size="small"
+          startIcon={<GalleryIcon fontSize="small" />}
+          onClick={showGallery}
         >
-          <ToggleButton value="xy">XY</ToggleButton>
-          <ToggleButton value="xz">XZ</ToggleButton>
-          <ToggleButton value="yz">YZ</ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
-
-      {/* Slice slider - uses props (not context) */}
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          flexGrow: 1,
-          minWidth: 200,
-        }}
+          Gallery
+        </Button>
+      </Tooltip>
+      <ToggleButtonGroup
+        value={layout.mode}
+        exclusive
+        size="small"
+        onChange={(_, mode: LayoutMode | null) => mode && layout.setMode(mode)}
+        aria-label="Layout"
       >
-        <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ whiteSpace: "nowrap" }}
+        <ToggleButton value="single">Single</ToggleButton>
+        <ToggleButton value="multi">Multi</ToggleButton>
+      </ToggleButtonGroup>
+
+      {layout.mode === "single" ? (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            View:
+          </Typography>
+          <ToggleButtonGroup
+            value={layout.axis}
+            exclusive
+            size="small"
+            onChange={(_, axis: ViewAxis | null) =>
+              axis && layout.setAxis(axis)
+            }
+            aria-label="Slice orientation"
+          >
+            <ToggleButton value="xy">XY</ToggleButton>
+            <ToggleButton value="xz">XZ</ToggleButton>
+            <ToggleButton value="yz">YZ</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      ) : (
+        <Box
+          sx={{ display: "flex", alignItems: "center" }}
+          aria-label="Visible views"
         >
-          {SLICE_AXIS_LABEL[state.axis]}: {sliceIndex}
-        </Typography>
-        <Slider
-          value={sliceIndex}
-          onChange={handleSliceChange}
-          min={0}
-          max={maxSliceIndex ?? 0}
-          disabled={maxSliceIndex === undefined}
+          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+            Show:
+          </Typography>
+          {VIEW_IDS.map((view, i) => (
+            <FormControlLabel
+              key={view}
+              sx={{ mr: 1 }}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={layout.multiVisible[i]}
+                  disabled={
+                    layout.multiVisible[i] &&
+                    layout.multiVisible.filter(Boolean).length === 1
+                  }
+                  onChange={() => layout.togglePane(i)}
+                  inputProps={{ "aria-label": `Show ${view} view` }}
+                />
+              }
+              label={<Typography variant="body2">{view}</Typography>}
+            />
+          ))}
+        </Box>
+      )}
+
+      <ToggleButtonGroup
+        value={layout.markerStyle}
+        exclusive
+        size="small"
+        onChange={(_, style: MarkerStyle | null) =>
+          style && layout.setMarkerStyle(style)
+        }
+        aria-label="Pick markers"
+      >
+        <Tooltip title="Picks as dots that fade with distance">
+          <ToggleButton value="dots">Dots</ToggleButton>
+        </Tooltip>
+        <Tooltip title="Picks as the cross-section of the object's radius">
+          <ToggleButton value="shells">Shells</ToggleButton>
+        </Tooltip>
+      </ToggleButtonGroup>
+
+      <Tooltip title="Reset views">
+        <IconButton
           size="small"
-          sx={{ flexGrow: 1 }}
-        />
-        <Typography variant="body2" color="text.secondary">
-          / {maxSliceIndex ?? "?"}
-        </Typography>
+          onClick={onResetViews}
+          aria-label="Reset views"
+        >
+          <CenterFocusStrong fontSize="small" />
+        </IconButton>
+      </Tooltip>
+
+      <Box sx={{ display: "flex", flexGrow: 1, gap: 2, minWidth: 220 }}>
+        {sliderAxes.map((axis) => {
+          const g = geometry?.axes[axis];
+          const max = g ? g.size - 1 : 0;
+          const world = g
+            ? indexToWorld(indices[axis], g) * (geometry?.angstromPerUnit ?? 1)
+            : null;
+          return (
+            <Box
+              key={axis}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                flex: 1,
+                minWidth: 140,
+              }}
+            >
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  whiteSpace: "nowrap",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+                title={world !== null ? `${world.toFixed(1)} Å` : undefined}
+              >
+                {AXES[axis].toUpperCase()}: {g ? indices[axis] : "?"} /{" "}
+                {g ? max : "?"}
+              </Typography>
+              <Slider
+                size="small"
+                value={indices[axis]}
+                min={0}
+                max={max}
+                disabled={!g}
+                onChange={(_, value) => setIndex(axis, value as number)}
+                aria-label={`${AXES[axis].toUpperCase()} slice`}
+                sx={{ flexGrow: 1 }}
+              />
+            </Box>
+          );
+        })}
       </Box>
     </Box>
   );

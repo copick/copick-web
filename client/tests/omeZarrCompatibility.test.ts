@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { OmeZarrImageSource } from "@idetik/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ChannelViewSource } from "../src/idetik/ChannelViewSource";
+
 const fixtureRoot = resolve(
   fileURLToPath(new URL("./fixtures/", import.meta.url)),
 );
@@ -208,5 +210,36 @@ describe("OME-Zarr format compatibility", () => {
       OmeZarrImageSource.fromHttp({ url: "http://fixtures.test/invalid.zarr" }),
     ).rejects.toThrow("Failed to parse OME-Zarr image");
     await expect(loadFirstChunk("v3-truncated.zarr")).rejects.toThrow();
+  });
+
+  it("splits a sharded 2-channel OME-Zarr 0.5 panoptic segmentation into single-channel sources", async () => {
+    const source = await OmeZarrImageSource.fromHttp({
+      url: "http://fixtures.test/v3-panoptic.zarr",
+    });
+    expect(source.getChannelCount()).toBe(2);
+    expect(source.getDimensions()).toMatchObject({
+      x: { lods: [{ size: 6, chunkSize: 4, scale: 10 }] },
+      y: { lods: [{ size: 5, chunkSize: 3, scale: 10 }] },
+      z: { lods: [{ size: 4, chunkSize: 2, scale: 10 }] },
+      c: { lods: [{ size: 2, chunkSize: 1 }] },
+    });
+
+    const load = async (channel: number) => {
+      const view = new ChannelViewSource(source, channel);
+      // LabelLayer only accepts single-channel sources: the view hides the channel axis.
+      expect(view.loader.getSourceDimensionMap().c).toBeUndefined();
+      const chunk = createFirstChunk(source);
+      await view.loader.loadChunkData(chunk, new AbortController().signal);
+      expect(chunk.chunkIndex.c).toBe(0);
+      return Array.from(chunk.data ?? []);
+    };
+
+    // tests/fixtures/generate.py panoptic_values(), first (2, 3, 4) chunk of each channel.
+    expect(await load(0)).toEqual([
+      1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2, 1, 1, 1, 2,
+    ]);
+    expect(await load(1)).toEqual([
+      1, 2, 3, 0, 7, 1, 2, 0, 6, 7, 1, 0, 3, 4, 5, 0, 2, 3, 4, 0, 1, 2, 3, 0,
+    ]);
   });
 });
