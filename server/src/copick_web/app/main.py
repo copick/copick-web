@@ -5,8 +5,9 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
@@ -72,8 +73,21 @@ app = FastAPI(
     description="API server for copick web visualization",
     version="0.1.0",
     lifespan=lifespan,
-    root_path=settings.base_path,
+    # A prefix the proxy forwards (e.g. /node/<host>/<port>); requests with or without it are routed alike.
+    root_path=settings.base_path.rstrip("/"),
 )
+
+
+@app.middleware("http")
+async def redirect_root_relatively(request: Request, call_next):
+    """Add the trailing slash to the app root under a forwarded prefix (``/node/<host>/<port>``) with a relative
+    redirect: Starlette's own is absolute and names the Host it was sent, which may be the backend behind the proxy."""
+    root = request.scope.get("root_path", "")
+    if root and request.url.path == root:
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(f"{root.rsplit('/', 1)[-1]}/{query}", status_code=307)
+    return await call_next(request)
+
 
 # Configure CORS
 app.add_middleware(

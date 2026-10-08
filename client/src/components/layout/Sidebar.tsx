@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Box, Typography, Divider, IconButton, Tooltip } from "@mui/material";
 import { Category as ObjectTypesIcon } from "@mui/icons-material";
 import { useConfig } from "@/api/hooks";
+import { appUrl } from "@/api/client";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { ObjectTypesDialog } from "@/components/config/ObjectTypesDialog";
@@ -29,7 +30,7 @@ export function Sidebar() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box
             component="img"
-            src={`${import.meta.env.BASE_URL}copick-logo.png`}
+            src={appUrl("copick-logo.png")}
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />

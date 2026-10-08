@@ -8,7 +8,9 @@ const hmrClientPort = process.env.VITE_HMR_CLIENT_PORT
   : undefined;
 
 export default defineConfig({
-  base: process.env.BASE_PATH ? `${process.env.BASE_PATH}/` : "/",
+  // Relative by default: the client finds its base from the page URL at runtime (src/api/client.ts), so one build
+  // runs under any URL prefix (e.g. Open OnDemand's /rnode/<host>/<port>/). BASE_PATH bakes in an absolute one.
+  base: process.env.BASE_PATH ? `${process.env.BASE_PATH}/` : "./",
   plugins: [react()],
   resolve: {
     alias: {
