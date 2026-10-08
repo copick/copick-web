@@ -89,7 +89,8 @@ formats present in the configured project.
 ## Running behind a reverse proxy
 
 Set `BASE_PATH` in `.env` to match your reverse proxy sub-path. The client container
-injects this at startup — no rebuild needed.
+injects this at startup — no rebuild needed. (The client also finds its prefix at runtime from the page URL; see
+"Behind a proxy" in the README for running the `copick-web` command under a prefix, e.g. on Open OnDemand.)
 
 ```bash
 # .env

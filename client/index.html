@@ -2,7 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <script>
+      // Every URL is relative to the page, which is the app root: under a proxy prefix
+      // (e.g. /rnode/<host>/<port>) without a trailing slash, add it before anything loads.
+      if (
+        !location.pathname.endsWith("/") &&
+        !/\.[A-Za-z0-9]+$/.test(location.pathname)
+      )
+        location.replace(
+          location.pathname + "/" + location.search + location.hash,
+        );
+    </script>
+    <link rel="icon" type="image/png" href="./copick-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Copick Web</title>
   </head>
