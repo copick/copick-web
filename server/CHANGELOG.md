@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.0-alpha](https://github.com/copick/copick-web/compare/server-v0.1.2...server-v1.0.0-alpha) (2026-10-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* support OME-Zarr 0.5 and Zarr v3 ([#19](https://github.com/copick/copick-web/issues/19))
+
+### Features
+
+* multi-panel viewer, filaments, instance and panoptic segmentations (Zarr v3) ([#21](https://github.com/copick/copick-web/issues/21)) ([4f6b2ee](https://github.com/copick/copick-web/commit/4f6b2eeadfba0ae52feb3b0a27cf510c8629798c))
+* reload the project from the sidebar ([#23](https://github.com/copick/copick-web/issues/23)) ([8e8c6aa](https://github.com/copick/copick-web/commit/8e8c6aa4848c03e0a8f08992c0a74f87acf98494))
+* serve under any URL prefix, set at runtime ([#27](https://github.com/copick/copick-web/issues/27)) ([55fb631](https://github.com/copick/copick-web/commit/55fb6311e8453ca3690544f0c98548b68262221e))
+* support OME-Zarr 0.5 and Zarr v3 ([#19](https://github.com/copick/copick-web/issues/19)) ([9a21984](https://github.com/copick/copick-web/commit/9a21984b3064cd0b8a83582b658ed875bb45d6a8))
+
 ## [0.1.2](https://github.com/copick/copick-web/compare/server-v0.1.1...server-v0.1.2) (2026-07-24)
 
 
