@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.3](https://github.com/copick/copick-web/compare/client-v0.1.2...client-v0.1.3) (2026-10-08)
+
+
+### Features
+
+* multi-panel viewer, filaments, instance and panoptic segmentations ([#20](https://github.com/copick/copick-web/issues/20)) ([ff48363](https://github.com/copick/copick-web/commit/ff48363349f6b523801bd5c19866ab90de189873))
+* reload the project from the sidebar ([#22](https://github.com/copick/copick-web/issues/22)) ([05d043d](https://github.com/copick/copick-web/commit/05d043d08db674e807895311249ec78b102380c5))
+* selectable slice orientations ([0f3bb06](https://github.com/copick/copick-web/commit/0f3bb06fc945922ecc3e2ebea9521759efcac1f2))
+* selectable slice orientations ([f4b9a34](https://github.com/copick/copick-web/commit/f4b9a34f28c7b50bb948d978609fc27ffc220165))
+* serve under any URL prefix, set at runtime ([#26](https://github.com/copick/copick-web/issues/26)) ([bb77a09](https://github.com/copick/copick-web/commit/bb77a09d631562e2e1a98c6ce3bddfbec30d7ef9))
+
 ## [0.1.2](https://github.com/copick/copick-web/compare/client-v0.1.1...client-v0.1.2) (2026-07-24)
 
 
