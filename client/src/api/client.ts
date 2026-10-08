@@ -16,6 +16,7 @@ import type {
   CreatePicksResponse,
   PickableObjectResponse,
   PicksDetailResponse,
+  ReloadResponse,
   PicksSummaryResponse,
   RunDetailResponse,
   RunInfoResponse,
@@ -125,6 +126,9 @@ export const api = {
   getConfig: () => fetchJson<ConfigResponse>("/config"),
 
   getObjects: () => fetchJson<PickableObjectResponse[]>("/objects"),
+
+  /** Re-open the project on the server, so runs, tomograms and annotations added since show up. */
+  reloadProject: () => requestJson<ReloadResponse>("POST", "/reload"),
 
   // Object types (configuration editing)
   getObjectTypes: () =>

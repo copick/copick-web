@@ -55,6 +55,11 @@ export interface ObjectTypeFields {
   filament: FilamentSpecFields | null;
 }
 
+/** The project after it was re-opened from its configuration file. */
+export interface ReloadResponse {
+  runs: number;
+}
+
 export interface ObjectTypesResponse {
   /** Version of the object list; changes must name the version they were made against. */
   version: string;

@@ -9,6 +9,7 @@ import { useConfig } from "@/api/hooks";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { ObjectTypesDialog } from "@/components/config/ObjectTypesDialog";
+import { ReloadProjectButton } from "./ReloadProjectButton";
 
 export function Sidebar() {
   const { data: config } = useConfig();
@@ -35,6 +36,7 @@ export function Sidebar() {
           <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
             {config?.name ?? "Copick Web"}
           </Typography>
+          <ReloadProjectButton />
           <Tooltip title="Object types: names, colours, labels…">
             <IconButton
               size="small"

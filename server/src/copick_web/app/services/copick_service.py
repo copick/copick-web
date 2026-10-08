@@ -2,6 +2,7 @@
 
 import logging
 import math
+import threading
 from typing import Iterable, Optional
 
 import copick
@@ -51,6 +52,32 @@ class CopickService:
         self.object_types = ObjectTypesEditor(self.root, config_path)
         self.thumbnails: BoundedCache = BoundedCache(thumbnail_cache_bytes, cache_max_age, size_of=thumbnail_size)
         self._measurements: BoundedCache = BoundedCache(measurement_cache_bytes, cache_max_age)
+        self._reload_lock = threading.Lock()
+
+    def reload(self) -> int:
+        """Re-open the project from its configuration file, like the desktop plugins' Reload.
+
+        copick keeps the runs and the entity lists it has read, so runs, tomograms and annotations added (or
+        removed) by other tools only show up after this. The old root's filesystems are reconnected first, which
+        also drops fsspec's cached instances and directory listings, and the thumbnail and measurement caches are
+        cleared. If the configuration cannot be opened, the project stays as it was and the error is raised.
+
+        Returns:
+            The number of runs.
+        """
+        with self._reload_lock:
+            reconnect = getattr(self.root, "reconnect", None)  # also drops fsspec's cached filesystems
+            if reconnect is not None:
+                try:
+                    reconnect()
+                except Exception:  # noqa: BLE001  (the new root connects on its own)
+                    logger.warning("Reconnecting the copick filesystems failed", exc_info=True)
+            root = copick.from_file(self.config_path)
+            self.root = root
+            self.object_types = ObjectTypesEditor(root, self.config_path)
+            self.thumbnails.clear()
+            self._measurements.clear()
+            return len(root.runs)
 
     def sweep_caches(self) -> int:
         """Drop expired cache entries (run periodically by the app); returns how many."""
