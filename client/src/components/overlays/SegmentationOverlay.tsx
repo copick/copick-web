@@ -21,6 +21,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Box, Chip } from "@mui/material";
 import { LabelLayer, OmeZarrImageSource } from "@idetik/core";
 import { useSegmentations, useObjects, useSurfacePoints } from "@/api/hooks";
+import { appUrl } from "@/api/client";
 import {
   segmentationTypeOf,
   type PickableObjectResponse,
@@ -164,7 +165,7 @@ function SegmentationLayers({
   const { setStatus } = useLayerStatus();
   const [opened, setOpened] = useState<OpenedSource | null>(null);
   const type = selection.segmentationType;
-  const url = `${window.location.origin}${seg.zarr_url}`;
+  const url = appUrl(seg.zarr_url);
 
   useEffect(() => {
     let alive = true;

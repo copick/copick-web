@@ -2,7 +2,7 @@
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from ..models import (
     CreatePicksRequest,
@@ -53,10 +53,14 @@ def _is_filament_object(service: CopickService, object_name: str) -> bool:
     return obj is not None and compat.filament_spec(obj) is not None
 
 
-def segmentation_zarr_url(root_path: str, run_name: str, seg) -> str:
+# Store URLs are relative to the app root (no leading slash): the client resolves them against the page it was
+# loaded from, so they work under any URL prefix, whether the proxy strips it or forwards it.
+
+
+def segmentation_zarr_url(run_name: str, seg) -> str:
     """The proxy URL of a segmentation store; the type is part of the path because it is part of the identity."""
     return (
-        f"{root_path}/zarr/segmentation/{compat.seg_type(seg)}/{run_name}/{seg.name}/{seg.user_id}/"
+        f"zarr/segmentation/{compat.seg_type(seg)}/{run_name}/{seg.name}/{seg.user_id}/"
         f"{seg.session_id}/{seg.voxel_size}"
     )
 
@@ -121,7 +125,6 @@ def get_tomogram(
     run_name: str,
     voxel_size: float,
     tomo_type: str,
-    request: Request,
     service: ServiceDependency,
 ) -> TomogramResponse:
     """Get tomogram details with zarr URL."""
@@ -133,8 +136,7 @@ def get_tomogram(
         )
 
     # Return proxy URL for the zarr store
-    root_path = request.scope.get("root_path", "")
-    zarr_url = f"{root_path}/zarr/tomo/{run_name}/{voxel_size}/{tomo_type}"
+    zarr_url = f"zarr/tomo/{run_name}/{voxel_size}/{tomo_type}"
     return TomogramResponse(tomo_type=tomo_type, zarr_url=zarr_url)
 
 
@@ -313,7 +315,6 @@ def delete_picks(
 @router.get("/runs/{run_name}/segmentations", response_model=list[SegmentationSummaryResponse])
 def get_segmentations(
     run_name: str,
-    request: Request,
     service: ServiceDependency,
     name: Annotated[Optional[str], Query()] = None,
     user_id: Annotated[Optional[str], Query()] = None,
@@ -327,7 +328,6 @@ def get_segmentations(
         raise HTTPException(status_code=404, detail=f"Run '{run_name}' not found")
 
     segs = service.get_segmentations(run_name, name, user_id, session_id, voxel_size, seg_types=segmentation_type)
-    root_path = request.scope.get("root_path", "")
 
     result = []
     for seg in segs:
@@ -343,7 +343,7 @@ def get_segmentations(
                 session_id=seg.session_id,
                 voxel_size=seg.voxel_size,
                 is_multilabel=seg.is_multilabel,
-                zarr_url=segmentation_zarr_url(root_path, run_name, seg),
+                zarr_url=segmentation_zarr_url(run_name, seg),
                 color=color,
                 segmentation_type=kind,
                 is_instance=kind == "instance",

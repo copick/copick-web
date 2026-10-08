@@ -45,6 +45,7 @@ import { PickingToolbar } from "@/components/picking/PickingToolbar";
 import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 import { FilamentEditToolbar } from "@/components/filaments/FilamentEditToolbar";
 import { FilamentEditEventHandler } from "@/components/filaments/FilamentEditEventHandler";
+import { appUrl } from "@/api/client";
 
 const STAGE_LABEL = {
   xy: "Loading XY first…",
@@ -76,7 +77,7 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   const indicesRef = useRef<XYZ>(indices);
   indicesRef.current = indices;
 
-  const sourceUrl = `${window.location.origin}${zarrUrl}`;
+  const sourceUrl = appUrl(zarrUrl);
   const {
     scene,
     stage,
