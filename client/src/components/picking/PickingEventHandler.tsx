@@ -1,156 +1,156 @@
-import { useCallback, useEffect } from "react";
-import { Idetik } from "@/idetik/Idetik";
-import { planeAxes } from "@/idetik/orientation";
-import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
+/**
+ * Turns clicks on the ortho panes into picking edits. Each visible ortho pane
+ * is listened to separately and converts the click with its own viewport
+ * (`runtime.clientToWorld(plane, …)`), putting the point on that pane's slice.
+ * There is no picking in 3D. Drags (pan) are not clicks.
+ */
 
-type WorldPoint = { x: number; y: number; z: number };
+import { useEffect, useRef, type MutableRefObject } from "react";
+import {
+  pointCentre,
+  usePicking,
+  type PickingPoint,
+} from "@/contexts/PickingContext";
+import { useScene } from "@/contexts/SceneContext";
+import {
+  AXES,
+  PLANES,
+  planeAxes,
+  worldToAngstrom,
+  type XYZ,
+} from "@/idetik/coordinates";
+
+const DRAG_THRESHOLD_PX = 4;
+/** Picking tolerance in Å around a click. */
+const NEAREST_THRESHOLD_ANGSTROM = 50;
 
 interface PickingEventHandlerProps {
-  viewer: Idetik | null;
-  sliceIndex: number;
-  onSliceIndexChange: (newIndex: number) => void;
-  maxSliceIndex: number | undefined;
-  voxelSpacing: number;
+  paneRefs: MutableRefObject<(HTMLDivElement | null)[]>;
 }
 
-export function PickingEventHandler({
-  viewer,
-  sliceIndex,
-  onSliceIndexChange,
-  maxSliceIndex,
-  voxelSpacing,
-}: PickingEventHandlerProps) {
-  const {
-    state: pickingState,
-    addPoint,
-    deletePoint,
-    selectPoint,
-    clearSelection,
-    isEditing,
-  } = usePicking();
-
-  const findNearestPoint = useCallback(
-    (world: WorldPoint, threshold = 50): PickingPoint | null => {
-      if (!isEditing || !viewer) return null;
-
-      const { u, v, w } = planeAxes(viewer.orientation);
-      const slicePosition = sliceIndex * voxelSpacing;
-      let nearest: PickingPoint | null = null;
-      let minDist = threshold;
-
-      for (const point of pickingState.localPoints) {
-        if (Math.abs(point[w] - slicePosition) > voxelSpacing * 3) continue;
-        const dist = Math.hypot(point[u] - world[u], point[v] - world[v]);
-        if (dist < minDist) {
-          minDist = dist;
-          nearest = point;
-        }
-      }
-
-      return nearest;
-    },
-    [isEditing, pickingState.localPoints, viewer, sliceIndex, voxelSpacing],
-  );
-
-  const handleClick = useCallback(
-    (event: MouseEvent) => {
-      if (!viewer || !isEditing) return;
-      if ((event.target as HTMLElement).tagName !== "CANVAS") return;
-
-      const { w } = planeAxes(viewer.orientation);
-      const world = viewer.screenToWorld(event.clientX, event.clientY);
-      world[w] = sliceIndex * voxelSpacing;
-
-      switch (pickingState.activeTool) {
-        case "add":
-          addPoint({
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-            x: world.x,
-            y: world.y,
-            z: world.z,
-            score: 1.0,
-          });
-          break;
-        case "select": {
-          const nearest = findNearestPoint(world);
-          if (nearest) selectPoint(nearest.id, event.shiftKey);
-          else if (!event.shiftKey) clearSelection();
-          break;
-        }
-        case "delete": {
-          const nearest = findNearestPoint(world);
-          if (nearest) deletePoint(nearest.id);
-          break;
-        }
-      }
-    },
-    [
-      viewer,
-      isEditing,
-      pickingState.activeTool,
-      findNearestPoint,
-      addPoint,
-      selectPoint,
-      deletePoint,
-      clearSelection,
-      sliceIndex,
-      voxelSpacing,
-    ],
-  );
-
-  const handleWheel = useCallback(
-    (event: WheelEvent) => {
-      if (!event.shiftKey || maxSliceIndex === undefined) return;
-      if ((event.target as HTMLElement).tagName !== "CANVAS") return;
-
-      event.preventDefault();
-      const delta = event.deltaY > 0 ? 1 : -1;
-      const newIndex = Math.max(0, Math.min(maxSliceIndex, sliceIndex + delta));
-      if (newIndex !== sliceIndex) onSliceIndexChange(newIndex);
-    },
-    [sliceIndex, maxSliceIndex, onSliceIndexChange],
-  );
+export function PickingEventHandler({ paneRefs }: PickingEventHandlerProps) {
+  const { scene, visible } = useScene();
+  const picking = usePicking();
+  const pickingRef = useRef(picking);
+  pickingRef.current = picking;
+  const visibleKey = visible.map(Number).join("");
+  const { isEditing } = picking;
+  const tool = picking.state.activeTool;
 
   useEffect(() => {
-    const canvas = viewer?.canvas;
-    if (!canvas) return;
+    if (!scene) return;
+    const { runtime, geometry, sliceCoords } = scene;
+    const perUnit = geometry.angstromPerUnit;
+    const voxelAngstrom =
+      Math.min(...geometry.axes.map((a) => a.scale)) * perUnit;
+    const disposers: (() => void)[] = [];
 
-    canvas.addEventListener("click", handleClick);
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    PLANES.forEach((plane, i) => {
+      const element = paneRefs.current[i];
+      if (!element || !visible[i]) return;
+      const [u, v, w] = planeAxes[plane];
+      let down: [number, number] | null = null;
 
-    return () => {
-      canvas.removeEventListener("click", handleClick);
-      canvas.removeEventListener("wheel", handleWheel);
-    };
-  }, [viewer, handleClick, handleWheel]);
+      const pointerDown = (event: PointerEvent) => {
+        down = event.button === 0 ? [event.clientX, event.clientY] : null;
+      };
 
+      const click = (event: MouseEvent) => {
+        const {
+          state,
+          isEditing,
+          addPoint,
+          selectPoint,
+          clearSelection,
+          deletePoint,
+        } = pickingRef.current;
+        if (!isEditing || !down) return;
+        if (
+          Math.hypot(event.clientX - down[0], event.clientY - down[1]) >
+          DRAG_THRESHOLD_PX
+        )
+          return;
+
+        const world = runtime.clientToWorld(
+          plane,
+          event.clientX,
+          event.clientY,
+        );
+        world[w] = sliceCoords[AXES[w]] ?? world[w];
+        const clicked = worldToAngstrom(world as XYZ, perUnit);
+
+        const nearest = (): PickingPoint | null => {
+          let best: PickingPoint | null = null;
+          let bestDistance = NEAREST_THRESHOLD_ANGSTROM;
+          for (const point of state.localPoints) {
+            const c = pointCentre(point);
+            if (Math.abs(c[w] - clicked[w]) > voxelAngstrom * 3) continue;
+            const d = Math.hypot(c[u] - clicked[u], c[v] - clicked[v]);
+            if (d < bestDistance) {
+              bestDistance = d;
+              best = point;
+            }
+          }
+          return best;
+        };
+
+        switch (state.activeTool) {
+          case "add":
+            addPoint({
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+              x: clicked[0],
+              y: clicked[1],
+              z: clicked[2],
+              score: 1.0,
+              instance_id: state.editingPicks?.isFilament
+                ? state.activeInstanceId
+                : 0,
+              transformation: null,
+            });
+            break;
+          case "select": {
+            const hit = nearest();
+            if (hit) selectPoint(hit.id, event.shiftKey);
+            else if (!event.shiftKey) clearSelection();
+            break;
+          }
+          case "delete": {
+            const hit = nearest();
+            if (hit) deletePoint(hit.id);
+            break;
+          }
+        }
+      };
+
+      element.addEventListener("pointerdown", pointerDown);
+      element.addEventListener("click", click);
+      disposers.push(() => {
+        element.removeEventListener("pointerdown", pointerDown);
+        element.removeEventListener("click", click);
+      });
+    });
+
+    return () => disposers.forEach((dispose) => dispose());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, visibleKey]);
+
+  // Cursor feedback per ortho pane.
   useEffect(() => {
-    const canvas = viewer?.canvas;
-    if (!canvas) return;
-
-    if (!isEditing) {
-      canvas.style.cursor = "";
-      return;
-    }
-
-    switch (pickingState.activeTool) {
-      case "add":
-        canvas.style.cursor = "crosshair";
-        break;
-      case "select":
-        canvas.style.cursor = "pointer";
-        break;
-      case "delete":
-        canvas.style.cursor = "not-allowed";
-        break;
-      default:
-        canvas.style.cursor = "";
-    }
-
+    const cursor = !isEditing
+      ? ""
+      : tool === "add"
+        ? "crosshair"
+        : tool === "select"
+          ? "pointer"
+          : tool === "delete"
+            ? "not-allowed"
+            : "";
+    const panes = paneRefs.current.slice(0, 3);
+    for (const pane of panes) if (pane) pane.style.cursor = cursor;
     return () => {
-      canvas.style.cursor = "";
+      for (const pane of panes) if (pane) pane.style.cursor = "";
     };
-  }, [viewer, pickingState.activeTool, isEditing]);
+  }, [isEditing, tool, paneRefs, visibleKey]);
 
   return null;
 }

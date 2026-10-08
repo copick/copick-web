@@ -15,8 +15,11 @@ copick-web consists of two components:
 
 - Browse copick runs, voxel spacings, and tomograms
 - View tomogram slices with channel controls and scale bar
-- Display particle picks as point overlays
-- View segmentation overlays with multilabel support
+- Linked XY / XZ / YZ orthoslices with crosshairs and a 3D volume view (or a single plane), panes toggleable
+- Display particle picks as point overlays (dots or physical radius shells), coloured per instance ID for filament objects
+- Filaments (ordered centrelines) drawn as dense points, coloured per filament ID
+- Segmentation overlays: binary, multilabel, instance (shared instance palette, click to identify, instance browser) and panoptic (objects / instances / both)
+- Newer copick features (filaments, instance and panoptic segmentations) are detected at runtime; older copick versions keep working
 
 ## Prerequisites
 
@@ -71,7 +74,7 @@ We offer dev containers for ease of use or manual dev setups.
 
 ### Docker/Podman Compose
 Pre-requisites: Podman (recommended) or Docker installed with Compose extension. Check if installed with `docker-compose version` or `podman compose version`
-- create .env file using .env.example as template. 
+- create .env file using .env.example as template.
 - obtain or use a copick project. Modify config.json's `overlay_root` parameter to `local:/data/copick_data/`
 ```
 # Example .env
@@ -170,12 +173,16 @@ Create a `.env` file in the `server/` directory to set these values.
 - `GET /api/runs/{run}` - Run details with voxel spacings
 - `GET /api/runs/{run}/picks` - List of picks for a run
 - `GET /api/runs/{run}/picks/{obj}/{user}/{session}` - Pick points
-- `GET /api/runs/{run}/segmentations` - List of segmentations
+- `GET /api/runs/{run}/segmentations` - List of segmentations (with `segmentation_type`; filter with `?segmentation_type=`)
+- `GET /api/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/instances?level=1` - Instance voxel counts and centroids (instance / panoptic)
+- `GET /api/runs/{run}/filaments` - Filament sets (empty on a copick without filaments)
+- `GET /api/runs/{run}/filaments/{obj}/{user}/{session}` - Filament centrelines (501 on a copick without filaments)
 
 ### Zarr Proxy
 
 - `GET /zarr/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
-- `GET /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
+- `GET /zarr/segmentation/{type}/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks (`type`: binary, multilabel, instance, panoptic)
+- `GET /zarr/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Legacy alias (binary and multilabel only)
 
 ## Architecture
 
