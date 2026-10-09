@@ -26,6 +26,13 @@ import uvicorn
 @click.option("--host", default="127.0.0.1", help="Host to bind to")
 @click.option("--port", default=8000, type=int, help="Port to bind to")
 @click.option("--no-browser", is_flag=True, help="Don't open browser automatically")
+@click.option(
+    "--base-path",
+    envvar="BASE_PATH",
+    default="",
+    help="URL prefix of a reverse proxy that forwards the full path, e.g. Open OnDemand's /node/<host>/<port>. "
+    "Not needed when the proxy strips the prefix (/rnode/<host>/<port>): the client works under any prefix.",
+)
 def main(
     configs: tuple[str, ...],
     config_dir: str | None,
@@ -33,6 +40,7 @@ def main(
     host: str,
     port: int,
     no_browser: bool,
+    base_path: str,
 ):
     """Start Copick Web server.
 
@@ -46,6 +54,7 @@ def main(
         copick-web a.json b.json --port 9000
         copick-web --config-dir ./configs --registry-url http://localhost:8000/copick/v1
         copick-web --registry-url http://localhost:8000/copick/v1
+        copick-web config.json --port 9000 --base-path /node/$(hostname)/9000
     """
     # Collect local config paths.
     local_paths: list[str] = [str(Path(c).resolve()) for c in configs]
@@ -64,8 +73,10 @@ def main(
     os.environ["COPICK_CONFIG_PATHS"] = json.dumps(local_paths)
     if registry_url:
         os.environ["REGISTRY_URL"] = registry_url
+    base_path = "/" + base_path.strip("/") if base_path.strip("/") else ""
+    os.environ["BASE_PATH"] = base_path
 
-    url = f"http://{host}:{port}"
+    url = f"http://{host}:{port}{base_path}/"
     click.echo(f"Starting Copick Web at {url}")
     if local_paths:
         click.echo(f"Local configs: {', '.join(local_paths)}")

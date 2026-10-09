@@ -8,6 +8,7 @@ import {
   ToggleButton,
   Button,
   Chip,
+  TextField,
   Tooltip,
 } from "@mui/material";
 import PanToolIcon from "@mui/icons-material/PanTool";
@@ -17,14 +18,19 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
 import CloseIcon from "@mui/icons-material/Close";
 import { usePicking, type PickingTool } from "@/contexts/PickingContext";
-import { useProjectId } from "@/contexts/CopickContext";
 import { useUpdatePicks } from "@/api/hooks";
 import { rgbaToCss } from "@/utils/colorUtils";
+import { instanceColor } from "@/utils/instanceColors";
 
 export function PickingToolbar() {
-  const { state, setTool, stopEditing, markSaved, deleteSelectedPoints } =
-    usePicking();
-  const projectId = useProjectId();
+  const {
+    state,
+    setTool,
+    stopEditing,
+    markSaved,
+    deleteSelectedPoints,
+    setActiveInstanceId,
+  } = usePicking();
   const updatePicks = useUpdatePicks();
 
   const handleToolChange = (
@@ -40,17 +46,18 @@ export function PickingToolbar() {
     if (!state.editingPicks) return;
 
     await updatePicks.mutateAsync({
-      projectId,
       runName: state.editingPicks.runName,
       objectName: state.editingPicks.objectName,
       userId: state.editingPicks.userId,
       sessionId: state.editingPicks.sessionId,
+      // Locations and transformations go back unchanged, so orientations and shifts survive.
       points: state.localPoints.map((p) => ({
         x: p.x,
         y: p.y,
         z: p.z,
         instance_id: p.instance_id,
         score: p.score,
+        transformation: p.transformation ?? null,
       })),
     });
 
@@ -122,6 +129,32 @@ export function PickingToolbar() {
           </ToggleButton>
         </Tooltip>
       </ToggleButtonGroup>
+
+      {/* Active filament: stamped as instance_id on new points */}
+      {state.editingPicks.isFilament && (
+        <Tooltip title="Filament ID given to new points (instance_id)">
+          <TextField
+            label="Active filament #"
+            type="number"
+            size="small"
+            value={state.activeInstanceId}
+            onChange={(e) => setActiveInstanceId(Number(e.target.value))}
+            inputProps={{ min: 1, step: 1, "aria-label": "Active filament" }}
+            sx={{
+              width: 140,
+              "& input": {
+                borderLeft: `6px solid ${rgbaToCss(
+                  instanceColor(
+                    state.activeInstanceId,
+                    state.editingPicks.color,
+                  ),
+                )}`,
+                pl: 1,
+              },
+            }}
+          />
+        </Tooltip>
+      )}
 
       {/* Point count */}
       <Chip

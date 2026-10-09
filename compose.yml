@@ -13,7 +13,7 @@ services:
       - COPICK_CONFIG_PATHS=["/data/copick_config.json"]
       - REGISTRY_URL=${REGISTRY_URL:-}
       - REGISTRY_REFRESH_SECONDS=${REGISTRY_REFRESH_SECONDS:-60}
-      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-32}
+      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-8}
       - BASE_PATH=${BASE_PATH:-}
       - SLURM_USER=${SLURM_USER:-}
       - SLURM_KEYFILE=/run/secrets/slurm_key

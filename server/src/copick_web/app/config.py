@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     copick_config_paths: list[str] = []
     registry_url: str | None = None
     registry_refresh_seconds: int = 60
-    service_cache_size: int = 6
+    service_cache_size: int = 8
     # Hard ceiling on a single zarr-chunk read. If exceeded, the request
     # returns 504 and the underlying CopickService is evicted so the next
     # request rebuilds with a fresh SSH connection.
@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     base_path: str = ""
+    # In-memory caches of derived data (env: THUMBNAIL_CACHE_MB, MEASUREMENT_CACHE_MB, CACHE_MAX_AGE_SECONDS,
+    # CACHE_SWEEP_SECONDS). Entries older than the max age are dropped by a sweep every CACHE_SWEEP_SECONDS.
+    thumbnail_cache_mb: int = 64
+    measurement_cache_mb: int = 512
+    cache_max_age_seconds: int = 3600
+    cache_sweep_seconds: int = 300
 
     class Config:
         env_file = ".env"

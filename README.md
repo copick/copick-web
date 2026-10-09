@@ -15,8 +15,11 @@ copick-web consists of two components:
 
 - Browse copick runs, voxel spacings, and tomograms
 - View tomogram slices with channel controls and scale bar
-- Display particle picks as point overlays
-- View segmentation overlays with multilabel support
+- Linked XY / XZ / YZ orthoslices with crosshairs and a 3D volume view (or a single plane), panes toggleable
+- Display particle picks as point overlays (dots or physical radius shells), coloured per instance ID for filament objects
+- Filaments (ordered centrelines) drawn as dense points, coloured per filament ID
+- Segmentation overlays: binary, multilabel, instance (shared instance palette, click to identify, instance browser) and panoptic (objects / instances / both)
+- Newer copick features (filaments, instance and panoptic segmentations) are detected at runtime; older copick versions keep working
 - Multi-tenant: host many copick projects from one server, sourced from local
   config files and/or an external project registry API. Lazy `CopickService`
   loading with a per-project LRU cache.
@@ -78,10 +81,31 @@ Options:
   --host TEXT             Host to bind to (default: 127.0.0.1)
   --port INTEGER          Port to bind to (default: 8000)
   --no-browser            Don't open browser automatically
+  --base-path TEXT        URL prefix of a proxy that forwards the full path (env: BASE_PATH)
   --help                  Show this message and exit.
 
 At least one of CONFIGS, --config-dir, or --registry-url is required.
 ```
+
+### Behind a proxy (e.g. Open OnDemand)
+
+The client finds its URL prefix at runtime from the page it was loaded from (without the `projects/<id>/` route),
+so the same install works under any prefix — for example a different `/rnode/<host>/<port>/` for every node and port
+an HPC job lands on, or the sub-path a reverse proxy in front of the compose stack serves it under.
+
+- **The proxy strips the prefix** (Open OnDemand's `/rnode/<host>/<port>/`): nothing to set.
+
+  ```bash
+  copick-web config.json --host 0.0.0.0 --port "$port" --no-browser
+  # open https://ondemand.example.org/rnode/$(hostname)/$port/
+  ```
+
+- **The proxy forwards the full path** (Open OnDemand's `/node/<host>/<port>/`): pass the prefix with
+  `--base-path` (or `BASE_PATH`). Requests with or without it are served alike.
+
+  ```bash
+  copick-web config.json --host 0.0.0.0 --port "$port" --no-browser --base-path "/node/$(hostname)/$port"
+  ```
 
 ## Development
 
@@ -204,11 +228,15 @@ environment. List-typed values use JSON-array syntax.
 | `COPICK_CONFIG_PATHS` | `[]` | JSON array of local copick config file paths to register at startup. |
 | `REGISTRY_URL` | _(unset)_ | Base URL of the project registry API (e.g. `http://localhost:8000/copick/v1`). The server appends `/projects/` itself. |
 | `REGISTRY_REFRESH_SECONDS` | `60` | Background refresh interval for the registry list. |
-| `SERVICE_CACHE_SIZE` | `6` | Max materialized `CopickService` instances kept in memory (LRU). |
+| `SERVICE_CACHE_SIZE` | `8` | Max materialized `CopickService` instances kept in memory (LRU). Each has its own derived-data caches (`THUMBNAIL_CACHE_MB` + `MEASUREMENT_CACHE_MB`). |
 | `CORS_ORIGINS` | localhost:5173/8000 | Allowed CORS origins. |
 | `HOST` | `0.0.0.0` | Server host. |
 | `PORT` | `8000` | Server port. |
-| `BASE_PATH` | `""` | URL prefix when running behind a reverse proxy. |
+| `BASE_PATH` | `""` | URL prefix of a reverse proxy that forwards it to the server (not needed when the proxy strips it). |
+| `THUMBNAIL_CACHE_MB` | `64` | Run gallery thumbnail cache, per open project. |
+| `MEASUREMENT_CACHE_MB` | `512` | Instance measurement and segmentation surface cache, per open project. |
+| `CACHE_MAX_AGE_SECONDS` | `3600` | Cached entries older than this are dropped. |
+| `CACHE_SWEEP_SECONDS` | `300` | How often expired entries of every open project are dropped. |
 
 At least one of `COPICK_CONFIG_PATHS` or `REGISTRY_URL` must be set; otherwise
 startup fails. The CLI sets `COPICK_CONFIG_PATHS` and `REGISTRY_URL` from its
@@ -226,20 +254,34 @@ All metadata and zarr-proxy routes are scoped under a `project_id`.
 ### Metadata (per project)
 
 - `GET /api/projects/{project_id}/config` - Project configuration
+- `POST /api/projects/{project_id}/reload` - Re-open the project, so runs and annotations added since show up
 - `GET /api/projects/{project_id}/objects` - Pickable objects
+- `GET|POST /api/projects/{project_id}/object-types`, `PUT|DELETE .../object-types/{name}` - Edit the object types in the project's configuration file
 - `GET /api/projects/{project_id}/runs` - List of runs
 - `GET /api/projects/{project_id}/runs/{run}` - Run details with voxel spacings
+- `GET /api/projects/{project_id}/runs/{run}/info` - Paths, portal links and contents of a run
+- `GET /api/projects/{project_id}/runs/{run}/thumbnail` - Gallery thumbnail (PNG)
 - `GET /api/projects/{project_id}/runs/{run}/picks` - List of picks for a run
 - `GET /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Pick points
 - `POST /api/projects/{project_id}/runs/{run}/picks` - Create picks
 - `PUT /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Update picks
 - `DELETE /api/projects/{project_id}/runs/{run}/picks/{obj}/{user}/{session}` - Delete picks
-- `GET /api/projects/{project_id}/runs/{run}/segmentations` - List of segmentations
+- `GET /api/projects/{project_id}/runs/{run}/segmentations` - List of segmentations (with `segmentation_type`; filter with `?segmentation_type=`)
+- `GET /api/projects/{project_id}/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/instances?level=1` - Instance voxel counts and centroids (instance / panoptic)
+- `GET /api/projects/{project_id}/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/surface` - Boundary voxels for the 3D view
+- `GET /api/projects/{project_id}/runs/{run}/filaments` - Filament sets (empty on a copick without filaments)
+- `GET|PUT|DELETE /api/projects/{project_id}/runs/{run}/filaments/{obj}/{user}/{session}` - Filament centrelines (501 on a copick without filaments)
+
+Object types of a registry project are saved to the `config.json` in its overlay root on the cluster, over SSH with the
+service account (`SLURM_USER` / `SLURM_KEYFILE`); without them they are read-only.
 
 ### Zarr Proxy
 
+Local projects' stores are read through the server; registry projects' `zarr_url`s point at their `data_url` directly.
+
 - `GET /zarr/{project_id}/tomo/{run}/{vs}/{type}/{path}` - Tomogram zarr chunks
-- `GET /zarr/{project_id}/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks
+- `GET /zarr/{project_id}/segmentation/{type}/{run}/{name}/{user}/{session}/{vs}/{path}` - Segmentation zarr chunks (`type`: binary, multilabel, instance, panoptic)
+- `GET /zarr/{project_id}/seg/{run}/{name}/{user}/{session}/{vs}/{path}` - Legacy alias (binary and multilabel only)
 
 ## Architecture
 

@@ -7,11 +7,11 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routes import config, projects, runs, zarr_proxy
+from .routes import config, filaments, projects, runs, zarr_proxy
 from .services.project_registry import ProjectRegistry, set_project_registry
 from .services.registry_client import RegistryClient
 
@@ -64,22 +64,35 @@ async def lifespan(app: FastAPI):
 
     set_project_registry(registry)
 
-    refresh_task: asyncio.Task | None = None
+    tasks = [asyncio.create_task(_sweep_caches(registry, settings.cache_sweep_seconds))]
     if client is not None:
-        refresh_task = asyncio.create_task(_refresh_loop(registry, settings.registry_refresh_seconds))
+        tasks.append(asyncio.create_task(_refresh_loop(registry, settings.registry_refresh_seconds)))
 
     logger.info("copick-web ready: %d project(s) listed.", len(registry.list_projects()))
 
     try:
         yield
     finally:
-        if refresh_task is not None:
-            refresh_task.cancel()
+        for task in tasks:
+            task.cancel()
             try:
-                await refresh_task
+                await task
             except asyncio.CancelledError:
                 pass
         logger.info("Shutting down copick-web server")
+
+
+async def _sweep_caches(registry: ProjectRegistry, every: float) -> None:
+    """Drop expired cache entries of every open project regularly, so memory is released even when nothing is
+    requested."""
+    while True:
+        await asyncio.sleep(max(every, 1))
+        try:
+            dropped = registry.sweep_caches()
+            if dropped:
+                logger.info(f"Dropped {dropped} expired cache entries")
+        except Exception as e:  # never let the sweeper die
+            logger.warning(f"Cache sweep failed: {e}")
 
 
 app = FastAPI(
@@ -87,9 +100,23 @@ app = FastAPI(
     description="API server for copick web visualization",
     version="0.1.0",
     lifespan=lifespan,
-    root_path=settings.base_path,
+    # A prefix the proxy forwards (e.g. /node/<host>/<port>); requests with or without it are routed alike.
+    root_path=settings.base_path.rstrip("/"),
 )
 
+
+@app.middleware("http")
+async def redirect_root_relatively(request: Request, call_next):
+    """Add the trailing slash to the app root under a forwarded prefix (``/node/<host>/<port>``) with a relative
+    redirect: Starlette's own is absolute and names the Host it was sent, which may be the backend behind the proxy."""
+    root = request.scope.get("root_path", "")
+    if root and request.url.path == root:
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(f"{root.rsplit('/', 1)[-1]}/{query}", status_code=307)
+    return await call_next(request)
+
+
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -101,6 +128,7 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(config.router)
 app.include_router(runs.router)
+app.include_router(filaments.router)
 app.include_router(zarr_proxy.router)
 
 

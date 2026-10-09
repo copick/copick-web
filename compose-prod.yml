@@ -11,7 +11,7 @@ services:
       - COPICK_CONFIG_PATHS=["/data/copick_config.json"]
       - REGISTRY_URL=${REGISTRY_URL:-}
       - REGISTRY_REFRESH_SECONDS=${REGISTRY_REFRESH_SECONDS:-60}
-      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-32}
+      - SERVICE_CACHE_SIZE=${SERVICE_CACHE_SIZE:-8}
       - BASE_PATH=${BASE_PATH:-}
       - SLURM_USER=${SLURM_USER:-}
       - SLURM_KEYFILE=/run/secrets/slurm_key
@@ -34,8 +34,6 @@ services:
     image: ghcr.io/copick/copick-web-client:latest
     ports:
       - "${PUBLIC_HOST_PORT:-8880}:80"
-    environment:
-      - BASE_PATH=${BASE_PATH:-}
     depends_on:
       - server
     restart: unless-stopped

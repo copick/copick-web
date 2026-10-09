@@ -2,6 +2,7 @@
  * Sidebar with navigation tree and entity tables.
  */
 
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -9,29 +10,24 @@ import {
   Button,
   IconButton,
   Tooltip,
-  CircularProgress,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import RefreshIcon from "@mui/icons-material/Refresh";
+import { Category as ObjectTypesIcon } from "@mui/icons-material";
 import { Link } from "react-router-dom";
-import { useConfig, useProjects, useReloadProject } from "@/api/hooks";
+import { useConfig, useProjects } from "@/api/hooks";
+import { appUrl } from "@/api/client";
 import { useProjectId } from "@/contexts/CopickContext";
-import { useResetProjectUI } from "@/pages/ProjectPage";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
+import { ObjectTypesDialog } from "@/components/config/ObjectTypesDialog";
+import { ReloadProjectButton } from "./ReloadProjectButton";
 
 export function Sidebar() {
   const projectId = useProjectId();
-  const { data: config } = useConfig(projectId);
+  const { data: config } = useConfig();
   const { data: projects } = useProjects();
-  const resetProjectUI = useResetProjectUI();
-  const reloadProject = useReloadProject();
+  const [objectTypesOpen, setObjectTypesOpen] = useState(false);
   const showBackLink = (projects?.length ?? 0) > 1;
-
-  const handleReload = () => {
-    resetProjectUI();
-    reloadProject.mutate(projectId);
-  };
 
   return (
     <Box
@@ -58,32 +54,32 @@ export function Sidebar() {
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box
             component="img"
-            src={`${import.meta.env.BASE_URL}copick-logo.png`}
+            src={appUrl("copick-logo.png")}
             alt="Copick"
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
           <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
             {config?.name ?? projectId}
           </Typography>
-          <Tooltip title="Reload project (drops server cache and SSH connection)">
-            <span>
-              <IconButton
-                size="small"
-                onClick={handleReload}
-                disabled={reloadProject.isPending}
-                aria-label="Reload project"
-              >
-                {reloadProject.isPending ? (
-                  <CircularProgress size={18} />
-                ) : (
-                  <RefreshIcon fontSize="small" />
-                )}
-              </IconButton>
-            </span>
+          <ReloadProjectButton />
+          <Tooltip title="Object types: names, colours, labels…">
+            <IconButton
+              size="small"
+              aria-label="Edit object types"
+              onClick={() => setObjectTypesOpen(true)}
+            >
+              <ObjectTypesIcon fontSize="small" />
+            </IconButton>
           </Tooltip>
         </Box>
         {config?.description && (
-          <Typography variant="caption" color="text.secondary" noWrap>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            title={config.description}
+            sx={{ display: "block" }}
+          >
             {config.description}
           </Typography>
         )}
@@ -103,6 +99,11 @@ export function Sidebar() {
       </Box>
 
       <Divider />
+
+      <ObjectTypesDialog
+        open={objectTypesOpen}
+        onClose={() => setObjectTypesOpen(false)}
+      />
 
       {/* Entity tabs */}
       <Box sx={{ flexShrink: 0, height: "50%", overflow: "auto" }}>

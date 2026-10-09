@@ -18,8 +18,15 @@ export interface EditingPicks {
   userId: string;
   sessionId: string;
   color: [number, number, number, number];
+  /** Filament object: points are coloured by instance ID and new points get the active filament ID. */
+  isFilament?: boolean;
 }
 
+/**
+ * A point being edited. `x`, `y`, `z` are the stored location (Å); the point
+ * is drawn at the location plus the translation of `transformation`, which is
+ * sent back unchanged on save so orientations and shifts survive.
+ */
 export interface PickingPoint {
   id: string; // Unique ID for selection
   x: number;
@@ -27,6 +34,24 @@ export interface PickingPoint {
   z: number;
   instance_id?: number | null;
   score?: number | null;
+  transformation?: number[][] | null;
+}
+
+/** The particle centre of a point (Å): location plus the translation of its transformation. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function pointCentre(p: {
+  x: number;
+  y: number;
+  z: number;
+  transformation?: number[][] | null;
+}): [number, number, number] {
+  const t = p.transformation;
+  if (!t || t.length < 3) return [p.x, p.y, p.z];
+  return [
+    p.x + (t[0]?.[3] ?? 0),
+    p.y + (t[1]?.[3] ?? 0),
+    p.z + (t[2]?.[3] ?? 0),
+  ];
 }
 
 interface PickingState {
@@ -35,6 +60,8 @@ interface PickingState {
   localPoints: PickingPoint[]; // Local copy of points being edited
   selectedPointIds: Set<string>;
   hasUnsavedChanges: boolean;
+  /** Instance ID stamped on new points of a filament object ("active filament #"). */
+  activeInstanceId: number;
 }
 
 type PickingAction =
@@ -47,6 +74,7 @@ type PickingAction =
   | { type: "SELECT_POINT"; pointId: string; addToSelection: boolean }
   | { type: "CLEAR_SELECTION" }
   | { type: "SET_POINTS"; points: PickingPoint[] }
+  | { type: "SET_ACTIVE_INSTANCE"; instanceId: number }
   | { type: "MARK_SAVED" };
 
 const initialState: PickingState = {
@@ -55,7 +83,12 @@ const initialState: PickingState = {
   localPoints: [],
   selectedPointIds: new Set(),
   hasUnsavedChanges: false,
+  activeInstanceId: 1,
 };
+
+function nextInstanceId(points: PickingPoint[]): number {
+  return points.reduce((m, p) => Math.max(m, p.instance_id ?? 0), 0) + 1;
+}
 
 function pickingReducer(
   state: PickingState,
@@ -73,6 +106,7 @@ function pickingReducer(
         selectedPointIds: new Set(),
         hasUnsavedChanges: false,
         activeTool: "add", // Switch to add mode when starting to edit
+        activeInstanceId: nextInstanceId(action.points),
       };
 
     case "STOP_EDITING":
@@ -131,6 +165,12 @@ function pickingReducer(
     case "SET_POINTS":
       return { ...state, localPoints: action.points, hasUnsavedChanges: true };
 
+    case "SET_ACTIVE_INSTANCE":
+      return {
+        ...state,
+        activeInstanceId: Math.max(1, Math.trunc(action.instanceId) || 1),
+      };
+
     case "MARK_SAVED":
       return { ...state, hasUnsavedChanges: false };
 
@@ -151,6 +191,7 @@ interface PickingContextType {
   selectPoint: (pointId: string, addToSelection?: boolean) => void;
   clearSelection: () => void;
   markSaved: () => void;
+  setActiveInstanceId: (instanceId: number) => void;
   isEditing: boolean;
 }
 
@@ -190,6 +231,10 @@ export function PickingProvider({ children }: { children: ReactNode }) {
       [],
     ),
     markSaved: useCallback(() => dispatch({ type: "MARK_SAVED" }), []),
+    setActiveInstanceId: useCallback(
+      (instanceId) => dispatch({ type: "SET_ACTIVE_INSTANCE", instanceId }),
+      [],
+    ),
     isEditing: state.editingPicks !== null,
   };
 

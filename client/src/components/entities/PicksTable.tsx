@@ -15,8 +15,9 @@ import {
   CircularProgress,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
 import { usePicks } from "@/api/hooks";
-import { useCopick, useProjectId } from "@/contexts/CopickContext";
+import { useCopick } from "@/contexts/CopickContext";
 import { rgbaToHex } from "@/utils/colorUtils";
 
 interface PicksTableProps {
@@ -24,8 +25,7 @@ interface PicksTableProps {
 }
 
 export function PicksTable({ runName }: PicksTableProps) {
-  const projectId = useProjectId();
-  const { data: picks, isLoading, error } = usePicks(projectId, runName);
+  const { data: picks, isLoading, error } = usePicks(runName);
   const { state, togglePickVisibility, addPick } = useCopick();
 
   if (isLoading) {
@@ -100,7 +100,9 @@ export function PicksTable({ runName }: PicksTableProps) {
             <TableRow
               key={`${pick.object_name}-${pick.user_id}-${pick.session_id}`}
               hover
+              onDoubleClick={rowDoubleClick(() => handleToggle(pick))}
               sx={{
+                ...toggleRowSx,
                 backgroundColor: `${rgbaToHex(pick.color)}20`,
               }}
             >

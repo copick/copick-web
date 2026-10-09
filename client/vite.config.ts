@@ -13,7 +13,9 @@ const hmrClientPort = process.env.VITE_HMR_CLIENT_PORT
 const usePolling = hmrClientPort !== undefined;
 
 export default defineConfig({
-  base: process.env.BASE_PATH ? `${process.env.BASE_PATH}/` : "/",
+  // Relative: index.html finds the app root from the page URL at runtime, so one build runs under any URL prefix
+  // (e.g. Open OnDemand's /rnode/<host>/<port>/ or a reverse proxy's /viewer/copick-web/).
+  base: "./",
   plugins: [react()],
   resolve: {
     alias: {

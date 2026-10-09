@@ -116,6 +116,30 @@ async def proxy_tomogram_zarr(
     )
 
 
+_SEG_TYPES = ("binary", "multilabel", "instance", "panoptic")
+
+
+@router.get("/segmentation/{seg_type}/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}/{path:path}")
+async def proxy_typed_segmentation_zarr(
+    project_id: str,
+    seg_type: str,
+    run_name: str,
+    seg_name: str,
+    user_id: str,
+    session_id: str,
+    voxel_size: float,
+    path: str,
+    service: CopickService = Depends(get_copick_service),
+    registry: ProjectRegistry = Depends(get_registry),
+) -> Response:
+    """Proxy zarr chunks for a segmentation of a given type (the type is part of a segmentation's identity)."""
+    if seg_type not in _SEG_TYPES:
+        raise HTTPException(status_code=404, detail=f"Unknown segmentation type '{seg_type}'")
+    return await _proxy_segmentation(
+        project_id, service, registry, run_name, seg_name, user_id, session_id, voxel_size, path, seg_type
+    )
+
+
 @router.get("/seg/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}/{path:path}")
 async def proxy_segmentation_zarr(
     project_id: str,
@@ -128,8 +152,25 @@ async def proxy_segmentation_zarr(
     service: CopickService = Depends(get_copick_service),
     registry: ProjectRegistry = Depends(get_registry),
 ) -> Response:
-    """Proxy zarr chunks for segmentations."""
-    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size)
+    """Proxy zarr chunks for segmentations (legacy alias: binary and multilabel only)."""
+    return await _proxy_segmentation(
+        project_id, service, registry, run_name, seg_name, user_id, session_id, voxel_size, path, None
+    )
+
+
+async def _proxy_segmentation(
+    project_id: str,
+    service: CopickService,
+    registry: ProjectRegistry,
+    run_name: str,
+    seg_name: str,
+    user_id: str,
+    session_id: str,
+    voxel_size: float,
+    path: str,
+    seg_type,
+) -> Response:
+    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size, seg_type)
     if store is None:
         raise HTTPException(
             status_code=404,

@@ -1,64 +1,47 @@
-"""Build zarr URLs returned to the client.
+"""Build the zarr URLs returned to the client.
 
-Two transports today:
+Two transports:
 
-- **Local-config projects** are read through this server's zarr proxy
-  (``/zarr/{project_id}/...``). The proxy reads chunks from local
-  filesystems via fsspec and re-serves them.
-- **Registry projects** publish their data over HTTPS at ``data_url``,
-  so the browser fetches chunks directly. The server's only job is to
-  hand the client a fully-formed URL.
-
-The registry case follows the documented copick filesystem layout
-(https://copick.github.io/copick/datamodel/)
+- **Through this server's zarr proxy** (``zarr/{project_id}/...``), which reads chunks via fsspec and re-serves them.
+  Always used for local-config projects. These URLs are relative to the app root (no leading slash): the client
+  resolves them against its base, so they work under any URL prefix.
+- **Directly from ``data_url``** for registry projects, which publish their overlay root over HTTPS: the browser
+  fetches chunks itself. The URL is the store's path under the overlay root, as copick names it (so every
+  segmentation type is covered), appended to ``data_url``. A store outside the overlay root falls back to the proxy.
 """
 
+from typing import Any, Optional
+
 from ..models import ProjectSummaryResponse
+from . import compat
 
 
-def _tomogram_relpath(run_name: str, voxel_size: float, tomo_type: str) -> str:
-    return f"ExperimentRuns/{run_name}/VoxelSpacing{voxel_size:.3f}/{tomo_type}.zarr"
+def _published_url(meta: ProjectSummaryResponse, root: Any, store_path: Optional[str]) -> Optional[str]:
+    """``data_url`` + the store's path relative to the overlay root, for registry projects (None: use the proxy)."""
+    if meta.source != "registry" or not meta.data_url or not store_path:
+        return None
+    base = (getattr(root, "root_overlay", None) or "").rstrip("/")
+    if not base or not store_path.startswith(base + "/"):
+        return None
+    return f"{meta.data_url.rstrip('/')}/{store_path[len(base) + 1 :]}"
 
 
-def _segmentation_relpath(
-    run_name: str,
-    voxel_size: float,
-    user_id: str,
-    session_id: str,
-    name: str,
-    is_multilabel: bool,
-) -> str:
-    suffix = "-multilabel" if is_multilabel else ""
-    filename = f"{voxel_size:.3f}_{user_id}_{session_id}_{name}{suffix}.zarr"
-    return f"ExperimentRuns/{run_name}/Segmentations/{filename}"
+def tomogram_zarr_url(meta: ProjectSummaryResponse, root: Any, run_name: str, voxel_size: float, tomo: Any) -> str:
+    """URL of a tomogram's zarr store."""
+    store_path = getattr(tomo, "static_path" if getattr(tomo, "read_only", False) else "overlay_path", None)
+    published = _published_url(meta, root, store_path)
+    if published:
+        return published
+    return f"zarr/{meta.id}/tomo/{run_name}/{voxel_size}/{tomo.tomo_type}"
 
 
-def build_tomogram_zarr_url(
-    meta: ProjectSummaryResponse,
-    root_path: str,
-    run_name: str,
-    voxel_size: float,
-    tomo_type: str,
-) -> str:
-    """Tomogram zarr URL: server proxy for local, ``data_url``-direct for registry."""
-    if meta.source == "registry" and meta.data_url:
-        rel = _tomogram_relpath(run_name, voxel_size, tomo_type)
-        return f"{meta.data_url.rstrip('/')}/{rel}"
-    return f"{root_path}/zarr/{meta.id}/tomo/{run_name}/{voxel_size}/{tomo_type}"
-
-
-def build_segmentation_zarr_url(
-    meta: ProjectSummaryResponse,
-    root_path: str,
-    run_name: str,
-    seg_name: str,
-    user_id: str,
-    session_id: str,
-    voxel_size: float,
-    is_multilabel: bool,
-) -> str:
-    """Segmentation zarr URL: server proxy for local, ``data_url``-direct for registry."""
-    if meta.source == "registry" and meta.data_url:
-        rel = _segmentation_relpath(run_name, voxel_size, user_id, session_id, seg_name, is_multilabel)
-        return f"{meta.data_url.rstrip('/')}/{rel}"
-    return f"{root_path}/zarr/{meta.id}/seg/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}"
+def segmentation_zarr_url(meta: ProjectSummaryResponse, root: Any, run_name: str, seg: Any) -> str:
+    """URL of a segmentation's zarr store; through the proxy, the type is part of the path because it is part of the
+    identity (a binary and an instance segmentation can share name, user, session and voxel size)."""
+    published = _published_url(meta, root, getattr(seg, "path", None))
+    if published:
+        return published
+    return (
+        f"zarr/{meta.id}/segmentation/{compat.seg_type(seg)}/{run_name}/{seg.name}/{seg.user_id}/"
+        f"{seg.session_id}/{seg.voxel_size}"
+    )

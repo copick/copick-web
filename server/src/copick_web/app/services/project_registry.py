@@ -14,7 +14,15 @@
        (``SLURM_USER`` / ``SLURM_KEYFILE``, host from ``cluster_id``).
        This lets the server write to HPC-local overlays it can't see
        directly. Only registry projects hit this path.
-    3. ``CopickService.from_config_string`` builds the copick root.
+    3. ``copick.from_string`` opens the copick root. A reload repeats
+       1-3, so configuration changes published since show up.
+
+  Object types are saved to the ``config.json`` in the overlay root on
+  the cluster, over SSH with the same service account
+  (``registry_config_file``): ``root_url`` is the web view of the
+  overlay root, so the file sits at ``config_url``'s path relative to
+  ``root_url``. Without SSH credentials, or when a config does not
+  follow that layout, the project's object types are read-only.
 
   Zarr chunk reads for registry projects do **not** go through this
   server. The client gets a URL pointing at ``entry.data_url`` and
@@ -36,9 +44,11 @@ from pathlib import Path
 from typing import Optional
 
 import anyio
+import copick
 
 from ..config import settings
 from ..models import ProjectSummaryResponse
+from .config_file import RemoteConfigFile
 from .copick_service import CopickService
 from .registry_client import ProjectEntry, RegistryClient, RegistryError
 
@@ -97,6 +107,24 @@ def _swap_local_to_ssh(value: Optional[str]) -> Optional[str]:
     return None
 
 
+def _ssh_args(entry: ProjectEntry) -> Optional[dict]:
+    """Service-account SSH parameters for the cluster of ``entry`` (None if ``SLURM_USER``/``SLURM_KEYFILE`` are unset)."""
+    user = settings.slurm_user
+    keyfile = settings.slurm_keyfile
+    if not user or not keyfile:
+        return None
+    return {
+        "username": user,
+        "host": settings.cluster_hosts.get(entry.cluster_id, entry.cluster_id),
+        "port": settings.slurm_ssh_port,
+        "client_keys": [keyfile],
+        "known_hosts": None,
+        # Bound how long a dead connection looks alive by asyncssh
+        "keepalive_interval": 30,
+        "keepalive_count_max": 3,
+    }
+
+
 def _rewrite_overlay_root(config_body: str, entry: ProjectEntry) -> str:
     """Rewrite registry configs so HPC-local roots are reached over SSH.
 
@@ -108,9 +136,8 @@ def _rewrite_overlay_root(config_body: str, entry: ProjectEntry) -> str:
     Only registry projects hit this path; local projects materialize via
     ``from_config_path`` and are never rewritten.
     """
-    user = settings.slurm_user
-    keyfile = settings.slurm_keyfile
-    if not user or not keyfile:
+    ssh_args = _ssh_args(entry)
+    if ssh_args is None:
         logger.debug(
             "SLURM_USER/SLURM_KEYFILE unset; leaving registry config for %s untouched",
             _registry_id(entry),
@@ -126,17 +153,6 @@ def _rewrite_overlay_root(config_body: str, entry: ProjectEntry) -> str:
     if not isinstance(cfg, dict) or cfg.get("config_type") != "filesystem":
         return config_body
 
-    host = settings.cluster_hosts.get(entry.cluster_id, entry.cluster_id)
-    ssh_args = {
-        "username": user,
-        "host": host,
-        "port": settings.slurm_ssh_port,
-        "client_keys": [keyfile],
-        "known_hosts": None,
-        # Bound how long a dead connection looks alive by asyncssh
-        "keepalive_interval": 30,
-        "keepalive_count_max": 3,
-    }
     rewrote_any = False
 
     for root_key, args_key in (("overlay_root", "overlay_fs_args"), ("static_root", "static_fs_args")):
@@ -152,12 +168,48 @@ def _rewrite_overlay_root(config_body: str, entry: ProjectEntry) -> str:
             _registry_id(entry),
             original,
             new_value,
-            user,
-            host,
+            ssh_args["username"],
+            ssh_args["host"],
         )
         rewrote_any = True
 
     return json.dumps(cfg) if rewrote_any else config_body
+
+
+def registry_config_file(entry: ProjectEntry, config_body: str) -> Optional[RemoteConfigFile]:
+    """The registry project's configuration file on the cluster, reached over SSH (None: object types read-only).
+
+    ``root_url`` is the web view of the (``local://``) overlay root, so the file is at ``config_url``'s path relative
+    to ``root_url``, under the overlay root: e.g. ``.../copick/25aug19a/run001/config.json`` with ``root_url``
+    ``.../copick/25aug19a/run001/`` is ``<overlay_root>/config.json``.
+    """
+    pid = _registry_id(entry)
+    ssh_args = _ssh_args(entry)
+    if ssh_args is None:
+        return None
+    root_url, config_url = entry.root_url, entry.config_url
+    if not root_url or not config_url or not config_url.startswith(root_url.rstrip("/") + "/"):
+        logger.info(
+            "Object types of %s are read-only: config_url %s is not under root_url %s", pid, config_url, root_url
+        )
+        return None
+    try:
+        overlay_root = json.loads(config_body).get("overlay_root")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    if not isinstance(overlay_root, str) or not overlay_root.startswith(_LOCAL_SCHEME):
+        logger.info("Object types of %s are read-only: overlay_root %s is not local://", pid, overlay_root)
+        return None
+
+    relative = config_url[len(root_url.rstrip("/")) + 1 :]
+    path = f"{overlay_root[len(_LOCAL_SCHEME):].rstrip('/')}/{relative}"
+
+    def open_fs():
+        from sshfs import SSHFileSystem
+
+        return SSHFileSystem(**ssh_args)
+
+    return RemoteConfigFile(open_fs, path, location=f"{ssh_args['username']}@{ssh_args['host']}:{path}")
 
 
 def _registry_summary(entry: ProjectEntry) -> ProjectSummaryResponse:
@@ -183,7 +235,7 @@ class ProjectRegistry:
     def __init__(
         self,
         registry_client: Optional[RegistryClient] = None,
-        service_cache_size: int = 32,
+        service_cache_size: int = 8,
     ):
         self._client = registry_client
         self._cache_size = service_cache_size
@@ -321,8 +373,14 @@ class ProjectRegistry:
         with self._services_lock:
             removed = self._services.pop(pid, None) is not None
         if removed:
-            logger.info("Evicted CopickService for project %s (manual reload).", pid)
+            logger.info("Evicted CopickService for project %s.", pid)
         return removed
+
+    def sweep_caches(self) -> int:
+        """Drop expired derived-data cache entries of every materialized project; returns how many."""
+        with self._services_lock:
+            services = list(self._services.values())
+        return sum(service.sweep_caches() for service in services)
 
     def _cache_get(self, pid: str) -> Optional[CopickService]:
         with self._services_lock:
@@ -358,19 +416,38 @@ class ProjectRegistry:
             if pid in self._local_projects:
                 local = self._local_projects[pid]
                 logger.info("Materializing CopickService for local project %s (%s).", pid, local.config_path)
-                service = CopickService.from_config_path(local.config_path)
+                service = CopickService.from_config_path(local.config_path, **_cache_options())
             else:
                 entry = self._registry_entries[pid]
                 if not entry.config_url:
                     raise RegistryError(f"Registry entry for {pid} has no config_url")
-                assert self._client is not None  # registry entries only exist if client is set
                 logger.info("Materializing CopickService for registry project %s (%s).", pid, entry.config_url)
-                body = self._client.fetch_config_json(entry.config_url)
-                body = _rewrite_overlay_root(body, entry)
-                service = CopickService.from_config_string(body)
+                service = self._registry_service(entry)
 
             self._cache_put(pid, service)
             return service
+
+    def _registry_service(self, entry: ProjectEntry) -> CopickService:
+        assert self._client is not None  # registry entries only exist if client is set
+        client, config_url = self._client, entry.config_url
+        # The first open reuses the body fetched here to find the config file; reloads fetch it again.
+        prefetched = [client.fetch_config_json(config_url)]
+        config_file = registry_config_file(entry, prefetched[0])
+
+        def open_root():
+            body = prefetched.pop() if prefetched else client.fetch_config_json(config_url)
+            return copick.from_string(_rewrite_overlay_root(body, entry))
+
+        return CopickService(open_root, config_file, **_cache_options())
+
+
+def _cache_options() -> dict:
+    """Derived-data cache limits of each project's ``CopickService`` (from settings)."""
+    return {
+        "thumbnail_cache_bytes": settings.thumbnail_cache_mb * 1024 * 1024,
+        "measurement_cache_bytes": settings.measurement_cache_mb * 1024 * 1024,
+        "cache_max_age": settings.cache_max_age_seconds or None,
+    }
 
 
 # Module-level singleton, populated by main.py lifespan.

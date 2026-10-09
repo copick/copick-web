@@ -2,7 +2,26 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <script>
+      // The app root, found from the page URL before anything loads, so one build runs under any URL prefix
+      // (e.g. Open OnDemand's /rnode/<host>/<port>/ or a reverse proxy's /viewer/copick-web/). Every relative URL
+      // (assets, API, stores) resolves against it, through the document base set here.
+      (function () {
+        var path = location.pathname;
+        // Without its trailing slash (and not a file), add it.
+        if (!path.endsWith("/") && !/\.[A-Za-z0-9]+$/.test(path)) {
+          location.replace(path + "/" + location.search + location.hash);
+          return;
+        }
+        // The page is the root, or a client route under it (projects/<id>/...): the last such route wins, so a
+        // prefix may itself contain "projects/".
+        var route = /^(.*\/)projects\/[^/]+(?:\/.*)?$/.exec(path);
+        var base = document.createElement("base");
+        base.href = route ? route[1] : path.replace(/[^/]*$/, "");
+        document.head.appendChild(base);
+      })();
+    </script>
+    <link rel="icon" type="image/png" href="./copick-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Copick Web</title>
   </head>
