@@ -23,7 +23,7 @@ const EMPTY: EditState = {
 };
 
 export function useStartFilamentEditing() {
-  const { state, addFilaments } = useCopick();
+  const { projectId, state, addFilaments } = useCopick();
   const { start } = useFilamentEditing();
   const { data: objects } = useObjects();
   const queryClient = useQueryClient();
@@ -42,6 +42,7 @@ export function useStartFilamentEditing() {
         const detail = await queryClient.fetchQuery({
           queryKey: [
             "filamentDetail",
+            projectId,
             runName,
             set.objectName,
             set.userId,
@@ -49,6 +50,7 @@ export function useStartFilamentEditing() {
           ],
           queryFn: () =>
             api.getFilamentDetail(
+              projectId,
               runName,
               set.objectName,
               set.userId,
@@ -65,6 +67,6 @@ export function useStartFilamentEditing() {
         edit,
       );
     },
-    [runName, voxelSize, objects, queryClient, start, addFilaments],
+    [projectId, runName, voxelSize, objects, queryClient, start, addFilaments],
   );
 }

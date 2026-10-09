@@ -1,11 +1,11 @@
 """Configuration and objects routes."""
 
-from pathlib import Path
 from typing import Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import ValidationError
 
+from ..dependencies import get_copick_service
 from ..models import (
     ConfigResponse,
     FeaturesResponse,
@@ -16,7 +16,7 @@ from ..models import (
     ReloadResponse,
 )
 from ..services import compat
-from ..services.copick_service import CopickService, get_copick_service
+from ..services.copick_service import CopickService
 from ..services.object_types import (
     FILAMENT_FIELDS,
     ObjectTypesConflict,
@@ -24,7 +24,7 @@ from ..services.object_types import (
     filament_spec_of,
 )
 
-router = APIRouter(prefix="/api", tags=["config"])
+router = APIRouter(prefix="/api/projects/{project_id}", tags=["config"])
 
 
 @router.get("/config", response_model=ConfigResponse)
@@ -95,7 +95,7 @@ def _object_types(service: CopickService) -> ObjectTypesResponse:
     return ObjectTypesResponse(
         version=editor.version,
         editable=editor.editable,
-        config_file=Path(service.config_path).name if service.config_path else None,
+        config_file=service.config_file.name if service.config_file is not None else None,
         suggested_label=editor.suggested_label(),
         objects=[_object_type(o) for o in editor.objects],
     )

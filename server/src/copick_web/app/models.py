@@ -15,6 +15,27 @@ class FeaturesResponse(BaseModel):
     pick_identity: bool = False
 
 
+class ProjectSummaryResponse(BaseModel):
+    """Summary of a project tracked by the project registry."""
+
+    id: str
+    source: Literal["registry", "local"]
+    # Registry-derived fields (all optional — locals don't have them).
+    session_name: Optional[str] = None
+    run_name: Optional[str] = None
+    cluster_id: Optional[str] = None
+    scope: Optional[str] = None
+    status: Optional[str] = None
+    created_at: Optional[str] = None
+    proc_run_id: Optional[int] = None
+    config_url: Optional[str] = None
+    data_url: Optional[str] = None
+    root_url: Optional[str] = None
+    # Pulled from copick config when service is materialized; nullable so listing stays cheap.
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class ConfigResponse(BaseModel):
     """Project configuration response."""
 

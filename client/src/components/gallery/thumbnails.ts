@@ -3,12 +3,13 @@
  * scroll into view), a few at a time, and kept so the gallery reopens
  * instantly. The kept thumbnails are bounded: at most MAX_ENTRIES, none older
  * than MAX_AGE_MS (swept every SWEEP_MS); dropped ones release their blob URL
- * and are fetched again if a card still needs them. Reloading the project
- * clears them all (clearThumbnails).
+ * and are fetched again if a card still needs them. Reloading a project
+ * clears its thumbnails (clearThumbnails). Thumbnails are kept by project and
+ * run, so runs of the same name in two projects never share one.
  */
 
 import { useSyncExternalStore } from "react";
-import { API_BASE } from "@/api/client";
+import { api } from "@/api/client";
 
 export type Thumbnail =
   | { state: "loading" }
@@ -73,12 +74,12 @@ export class ThumbnailStore {
     return dropped;
   }
 
-  /** Drop every thumbnail (loading ones too); returns how many. */
-  clear(): number {
-    const dropped = this.items.size;
-    for (const run of [...this.items.keys()]) this.drop(run);
-    if (dropped) this.notify();
-    return dropped;
+  /** Drop every thumbnail (loading ones too), or those whose key matches; returns how many. */
+  clear(match: (key: string) => boolean = () => true): number {
+    const keys = [...this.items.keys()].filter(match);
+    for (const key of keys) this.drop(key);
+    if (keys.length) this.notify();
+    return keys.length;
   }
 
   subscribe(listener: () => void): () => void {
@@ -106,29 +107,33 @@ export class ThumbnailStore {
 }
 
 const store = new ThumbnailStore();
-const queue: string[] = [];
+const queue: { projectId: string; run: string }[] = [];
 let inFlight = 0;
-/** Bumped by clearThumbnails: responses to requests made before are dropped. */
-let generation = 0;
+/** Per project, bumped by clearThumbnails: responses to requests made before are dropped. */
+const generations = new Map<string, number>();
+
+/** Store key of a project's run. */
+const keyOf = (projectId: string, run: string) =>
+  JSON.stringify([projectId, run]);
+const generationOf = (projectId: string) => generations.get(projectId) ?? 0;
 
 if (typeof window !== "undefined")
   window.setInterval(() => store.sweep(), SWEEP_MS);
 
 function pump() {
   while (inFlight < MAX_IN_FLIGHT && queue.length) {
-    const run = queue.shift()!;
-    const requested = generation;
+    const { projectId, run } = queue.shift()!;
+    const key = keyOf(projectId, run);
+    const requested = generationOf(projectId);
     inFlight++;
-    fetch(
-      `${API_BASE}/runs/${encodeURIComponent(run)}/thumbnail?size=${THUMBNAIL_SIZE}`,
-    )
+    fetch(api.runThumbnailUrl(projectId, run, THUMBNAIL_SIZE))
       .then(async (response) => {
         if (response.status === 404) throw new Error("No tomogram");
         if (!response.ok)
           throw new Error(`Preview unavailable (${response.status})`);
         const blob = await response.blob();
-        if (requested !== generation) return;
-        store.set(run, {
+        if (requested !== generationOf(projectId)) return;
+        store.set(key, {
           state: "ready",
           url: URL.createObjectURL(blob),
           tomoType: response.headers.get("X-Copick-Tomo-Type") ?? "",
@@ -136,8 +141,8 @@ function pump() {
         });
       })
       .catch((e: unknown) => {
-        if (requested !== generation) return;
-        store.set(run, {
+        if (requested !== generationOf(projectId)) return;
+        store.set(key, {
           state: "error",
           message: e instanceof Error ? e.message : String(e),
         });
@@ -149,25 +154,31 @@ function pump() {
   }
 }
 
-/** Forget every thumbnail (the project was reloaded): cards in view ask again. */
-export function clearThumbnails(): void {
-  generation++;
-  queue.length = 0;
-  store.clear();
+/** Forget a project's thumbnails (it was reloaded): cards in view ask again. */
+export function clearThumbnails(projectId: string): void {
+  generations.set(projectId, generationOf(projectId) + 1);
+  for (let i = queue.length - 1; i >= 0; i--)
+    if (queue[i].projectId === projectId) queue.splice(i, 1);
+  const prefix = keyOf(projectId, "").slice(0, -2); // '["<projectId>","'
+  store.clear((key) => key.startsWith(prefix));
 }
 
 /** Ask for a run's thumbnail (once while it is kept; later calls are no-ops). */
-export function requestThumbnail(run: string): void {
-  if (store.has(run)) return;
-  queue.push(run);
-  store.set(run, { state: "loading" });
+export function requestThumbnail(projectId: string, run: string): void {
+  const key = keyOf(projectId, run);
+  if (store.has(key)) return;
+  queue.push({ projectId, run });
+  store.set(key, { state: "loading" });
   pump();
 }
 
 /** A run's thumbnail, or undefined until it is requested (or after it was dropped). */
-export function useThumbnail(run: string): Thumbnail | undefined {
+export function useThumbnail(
+  projectId: string,
+  run: string,
+): Thumbnail | undefined {
   return useSyncExternalStore(
     (listener) => store.subscribe(listener),
-    () => store.get(run),
+    () => store.get(keyOf(projectId, run)),
   );
 }

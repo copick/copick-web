@@ -11,6 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
+from ..dependencies import get_copick_service
 from ..models import (
     FilamentCurveModel,
     FilamentResponse,
@@ -20,10 +21,10 @@ from ..models import (
     SaveFilamentsResponse,
 )
 from ..services import compat
-from ..services.copick_service import CopickService, get_copick_service
+from ..services.copick_service import CopickService
 from ..validation import validate_copick_name
 
-router = APIRouter(prefix="/api", tags=["filaments"])
+router = APIRouter(prefix="/api/projects/{project_id}", tags=["filaments"])
 
 _GREY = (100, 100, 100, 255)
 

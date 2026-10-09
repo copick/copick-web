@@ -1,0 +1,22 @@
+# Optional overlay: joins the client to the external `embrella` network so
+# another compose stack can reach this one at http://copick-web.
+#
+# The `embrella` network must already exist (it is created by the embrella
+# stack). Without this overlay the compose files above run standalone.
+#
+#   docker-compose -f compose-dev.yml -f compose-embrella.yml up
+#   docker-compose -f compose.yml     -f compose-embrella.yml up -d
+#   docker-compose -f compose-prod.yml -f compose-embrella.yml up -d
+#
+# Or set COMPOSE_FILE in .env on hosts that always want it, e.g.
+#   COMPOSE_FILE=compose-prod.yml:compose-embrella.yml
+services:
+  client:
+    networks:
+      embrella:
+        aliases:
+          - copick-web
+
+networks:
+  embrella:
+    external: true

@@ -16,7 +16,7 @@ import { ArrowBack as BackIcon } from "@mui/icons-material";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { useRuns } from "@/api/hooks";
-import { useTomogramSelection } from "@/contexts/CopickContext";
+import { useProjectId, useTomogramSelection } from "@/contexts/CopickContext";
 import { useNavigation } from "@/contexts/NavigationContext";
 import { TableSearch } from "@/components/entities/TableSearch";
 import { useOpenTomogram } from "@/components/navigation/useOpenTomogram";
@@ -30,6 +30,7 @@ export function RunGallery() {
   const selection = useTomogramSelection();
   const openTomogram = useOpenTomogram();
   const queryClient = useQueryClient();
+  const projectId = useProjectId();
   const shown = (runs ?? []).filter((r) => matchesSearch(runSearch, [r.name]));
   const hasTomogram =
     !!selection.selectedRunName &&
@@ -38,8 +39,8 @@ export function RunGallery() {
 
   const open = async (runName: string) => {
     const run = await queryClient.fetchQuery({
-      queryKey: ["run", runName],
-      queryFn: () => api.getRun(runName),
+      queryKey: ["run", projectId, runName],
+      queryFn: () => api.getRun(projectId, runName),
     });
     const choice = chooseTomogram(run, {
       voxelSize: selection.selectedVoxelSize,
@@ -126,20 +127,21 @@ function RunCard({
   onOpen: () => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
-  const thumbnail = useThumbnail(runName);
+  const projectId = useProjectId();
+  const thumbnail = useThumbnail(projectId, runName);
 
   // Load the thumbnail when the card comes into view.
   useEffect(() => {
     const element = ref.current;
     if (!element || thumbnail) return;
     if (typeof IntersectionObserver === "undefined") {
-      requestThumbnail(runName);
+      requestThumbnail(projectId, runName);
       return;
     }
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          requestThumbnail(runName);
+          requestThumbnail(projectId, runName);
           observer.disconnect();
         }
       },
@@ -147,7 +149,7 @@ function RunCard({
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [runName, thumbnail]);
+  }, [projectId, runName, thumbnail]);
 
   return (
     <ButtonBase

@@ -1,26 +1,13 @@
-import { CopickProvider } from "@/contexts/CopickContext";
-import { PickingProvider } from "@/contexts/PickingContext";
-import { FilamentEditingProvider } from "@/contexts/FilamentEditingContext";
-import { NavigationProvider } from "@/contexts/NavigationContext";
-import { ViewerBridgeProvider } from "@/contexts/ViewerBridgeProvider";
-import { LayerStatusProvider } from "@/contexts/LayerStatusContext";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { Routes, Route } from "react-router-dom";
+import { ProjectListPage } from "@/pages/ProjectListPage";
+import { ProjectPage } from "@/pages/ProjectPage";
 
 function App() {
   return (
-    <CopickProvider>
-      <PickingProvider>
-        <FilamentEditingProvider>
-          <NavigationProvider>
-            <ViewerBridgeProvider>
-              <LayerStatusProvider>
-                <AppLayout />
-              </LayerStatusProvider>
-            </ViewerBridgeProvider>
-          </NavigationProvider>
-        </FilamentEditingProvider>
-      </PickingProvider>
-    </CopickProvider>
+    <Routes>
+      <Route path="/" element={<ProjectListPage />} />
+      <Route path="/projects/:projectId/*" element={<ProjectPage />} />
+    </Routes>
   );
 }
 
