@@ -27,6 +27,7 @@ import {
   type ViewAxis,
 } from "@/contexts/LayoutContext";
 import { useScene } from "@/contexts/SceneContext";
+import { ShortcutsHelp } from "./ShortcutsHelp";
 import { useSlice } from "@/contexts/SliceContext";
 import { AXES, VIEW_IDS, indexToWorld } from "@/idetik/coordinates";
 import type { MarkerStyle } from "@/idetik/PickMarkersLayer";
@@ -157,6 +158,7 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
           <CenterFocusStrong fontSize="small" />
         </IconButton>
       </Tooltip>
+      <ShortcutsHelp />
 
       <Box sx={{ display: "flex", flexGrow: 1, gap: 2, minWidth: 220 }}>
         {sliderAxes.map((axis) => {
