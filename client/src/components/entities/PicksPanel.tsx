@@ -37,11 +37,11 @@ import {
 import { useCopick } from "@/contexts/CopickContext";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
 import { EntityNameCell } from "./EntityNameCell";
-import { COL, entityTableSx, swatchSx } from "./entityTableStyles";
+import { COL, entityTableSx, shownRowSx, swatchSx } from "./entityTableStyles";
 import { usePicking, type PickingPoint } from "@/contexts/PickingContext";
 import { useFilamentEditing } from "@/contexts/FilamentEditingContext";
 import { rgbaToHex } from "@/utils/colorUtils";
-import { matchesSearch } from "@/utils/tableSearch";
+import { matchesSearch, noMatchText } from "@/utils/tableSearch";
 import { TableSearch } from "./TableSearch";
 import { NewPickDialog } from "@/components/picking/NewPickDialog";
 import type { PicksSummaryResponse } from "@/api/types";
@@ -51,19 +51,33 @@ interface PicksPanelProps {
   /** Search text (see TableSearch). */
   search: string;
   onSearchChange: (value: string) => void;
+  /** List only the rows shown in the viewer (see TableSearch). */
+  shownOnly: boolean;
+  onShownOnlyChange: (value: boolean) => void;
 }
 
 export function PicksPanel({
   runName,
   search,
   onSearchChange,
+  shownOnly,
+  onShownOnlyChange,
 }: PicksPanelProps) {
   const { data: picks, isLoading, error } = usePicks(runName);
-  const shownPicks = (picks ?? []).filter((p) =>
-    matchesSearch(search, [p.object_name, p.user_id, p.session_id]),
-  );
   const { state, togglePickVisibility, addPick, setPickColorByInstance } =
     useCopick();
+  const displayedKeys = new Set(
+    state.selectedPicks
+      .filter((p) => p.visible)
+      .map((p) => `${p.objectName}:${p.userId}:${p.sessionId}`),
+  );
+  const isDisplayed = (p: PicksSummaryResponse) =>
+    displayedKeys.has(`${p.object_name}:${p.user_id}:${p.session_id}`);
+  const shownPicks = (picks ?? []).filter(
+    (p) =>
+      (!shownOnly || isDisplayed(p)) &&
+      matchesSearch(search, [p.object_name, p.user_id, p.session_id]),
+  );
   const { state: pickingState, isEditing: isEditingPicks } = usePicking();
   const { isEditing: isEditingFilaments } = useFilamentEditing();
   // Picks and filaments are never edited at the same time.
@@ -191,6 +205,9 @@ export function PicksPanel({
             what="picks"
             shown={shownPicks.length}
             total={picks.length}
+            shownOnly={shownOnly}
+            onShownOnlyChange={onShownOnlyChange}
+            displayed={(picks ?? []).filter(isDisplayed).length}
           />
         )}
       </Box>
@@ -202,7 +219,7 @@ export function PicksPanel({
         </Typography>
       ) : shownPicks.length === 0 ? (
         <Typography color="text.secondary" sx={{ p: 2 }}>
-          No picks match “{search.trim()}”
+          {noMatchText("picks", search, shownOnly)}
         </Typography>
       ) : (
         <TableContainer sx={{ flexGrow: 1 }}>
@@ -340,6 +357,7 @@ function PickRow({
       onDoubleClick={rowDoubleClick(onToggle)}
       sx={{
         ...toggleRowSx,
+        ...shownRowSx(isVisible),
         backgroundColor: isCurrentlyEditing
           ? `${rgbaToHex(pick.color)}40`
           : `${rgbaToHex(pick.color)}20`,
