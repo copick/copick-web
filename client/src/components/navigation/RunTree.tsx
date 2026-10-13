@@ -1,8 +1,10 @@
 /**
- * Tree view for navigating runs, voxel spacings, and tomograms.
+ * Tree view for navigating runs, voxel spacings, and tomograms. The shown tomogram is revealed whenever one is
+ * opened (from the gallery, the run info dialog or the tree): its run and voxel spacing expand and it scrolls into
+ * view.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Box,
   IconButton,
@@ -116,14 +118,26 @@ interface RunTreeNodeProps {
   onInfo: () => void;
 }
 
+/** Scroll margin above revealed entries, so the sticky run search does not cover them. */
+const REVEAL_MARGIN_PX = 56;
+/** Wait for the expand animation before scrolling an entry into view. */
+const REVEAL_DELAY_MS = 350;
+
 function RunTreeNode({ runName, onInfo }: RunTreeNodeProps) {
-  const [expanded, setExpanded] = useState(false);
   const { state } = useCopick();
+  const holdsShownTomogram = state.selectedRunName === runName;
+  const [expanded, setExpanded] = useState(holdsShownTomogram);
 
   // Expanding a run only navigates; the shown tomogram (and its run's annotations) change when a tomogram is picked.
   const handleClick = () => setExpanded(!expanded);
 
-  const holdsShownTomogram = state.selectedRunName === runName;
+  // Reveal the shown tomogram: expand its run whenever a tomogram of it is opened (it can be collapsed again).
+  const shownHere = holdsShownTomogram
+    ? `${state.selectedVoxelSize}/${state.selectedTomoType}`
+    : null;
+  useEffect(() => {
+    if (shownHere) setExpanded(true);
+  }, [shownHere]);
 
   return (
     <>
@@ -212,9 +226,18 @@ interface VoxelSpacingNodeProps {
 }
 
 function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
-  const [expanded, setExpanded] = useState(false);
   const { state } = useCopick();
+  const shownHere =
+    state.selectedRunName === runName &&
+    state.selectedVoxelSize === voxelSpacing.voxel_size
+      ? state.selectedTomoType
+      : null;
+  const [expanded, setExpanded] = useState(shownHere !== null);
   const openTomogram = useOpenTomogram();
+
+  useEffect(() => {
+    if (shownHere) setExpanded(true);
+  }, [shownHere]);
 
   const handleTomogramClick = (tomoType: string) =>
     openTomogram(runName, voxelSpacing.voxel_size, tomoType);
@@ -241,23 +264,56 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
               state.selectedTomoType === tomo.tomo_type;
 
             return (
-              <ListItemButton
+              <TomogramItem
                 key={tomo.tomo_type}
-                onClick={() => handleTomogramClick(tomo.tomo_type)}
+                tomoType={tomo.tomo_type}
                 selected={isSelected}
-              >
-                <ListItemIcon sx={{ minWidth: 28 }}>
-                  <Image fontSize="small" />
-                </ListItemIcon>
-                <ListItemText
-                  primary={tomo.tomo_type}
-                  primaryTypographyProps={{ variant: "body2", noWrap: true }}
-                />
-              </ListItemButton>
+                onClick={() => handleTomogramClick(tomo.tomo_type)}
+              />
             );
           })}
         </List>
       </Collapse>
     </>
+  );
+}
+
+function TomogramItem({
+  tomoType,
+  selected,
+  onClick,
+}: {
+  tomoType: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Scroll the shown tomogram into view once its run and voxel spacing have expanded.
+  useEffect(() => {
+    if (!selected) return;
+    const timer = window.setTimeout(
+      () => ref.current?.scrollIntoView({ block: "nearest" }),
+      REVEAL_DELAY_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [selected]);
+
+  return (
+    <ListItemButton
+      ref={ref}
+      onClick={onClick}
+      selected={selected}
+      data-testid={selected ? "shown-tomogram" : undefined}
+      sx={{ scrollMarginTop: REVEAL_MARGIN_PX }}
+    >
+      <ListItemIcon sx={{ minWidth: 28 }}>
+        <Image fontSize="small" />
+      </ListItemIcon>
+      <ListItemText
+        primary={tomoType}
+        primaryTypographyProps={{ variant: "body2", noWrap: true }}
+      />
+    </ListItemButton>
   );
 }
