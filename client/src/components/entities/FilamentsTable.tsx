@@ -35,9 +35,9 @@ import { useFilamentDetail, useFilaments } from "@/api/hooks";
 import type { FilamentsSummaryResponse } from "@/api/types";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
 import { EntityNameCell } from "./EntityNameCell";
-import { COL, entityTableSx, swatchSx } from "./entityTableStyles";
+import { COL, entityTableSx, shownRowSx, swatchSx } from "./entityTableStyles";
 import { useFilamentEditing } from "@/contexts/FilamentEditingContext";
-import { matchesSearch } from "@/utils/tableSearch";
+import { matchesSearch, noMatchText } from "@/utils/tableSearch";
 import { TableSearch } from "./TableSearch";
 import { usePicking } from "@/contexts/PickingContext";
 import { NewFilamentsDialog } from "@/components/filaments/NewFilamentsDialog";
@@ -52,18 +52,36 @@ interface FilamentsTableProps {
   /** Search text (see TableSearch). */
   search: string;
   onSearchChange: (value: string) => void;
+  /** List only the rows shown in the viewer (see TableSearch). */
+  shownOnly: boolean;
+  onShownOnlyChange: (value: boolean) => void;
 }
 
 export function FilamentsTable({
   runName,
   search,
   onSearchChange,
+  shownOnly,
+  onShownOnlyChange,
 }: FilamentsTableProps) {
   const { data: sets, isLoading, error } = useFilaments(runName);
-  const shownSets = (sets ?? []).filter((f) =>
-    matchesSearch(search, [f.object_name, f.user_id, f.session_id]),
-  );
   const { state, toggleFilamentsVisibility, addFilaments } = useCopick();
+  const displayedKeys = new Set(
+    state.selectedFilaments.filter((f) => f.visible).map(filamentsKey),
+  );
+  const isDisplayed = (f: FilamentsSummaryResponse) =>
+    displayedKeys.has(
+      filamentsKey({
+        objectName: f.object_name,
+        userId: f.user_id,
+        sessionId: f.session_id,
+      }),
+    );
+  const shownSets = (sets ?? []).filter(
+    (f) =>
+      (!shownOnly || isDisplayed(f)) &&
+      matchesSearch(search, [f.object_name, f.user_id, f.session_id]),
+  );
   const [expanded, setExpanded] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const filamentEditing = useFilamentEditing();
@@ -108,6 +126,9 @@ export function FilamentsTable({
             what="filaments"
             shown={shownSets.length}
             total={sets.length}
+            shownOnly={shownOnly}
+            onShownOnlyChange={onShownOnlyChange}
+            displayed={sets.filter(isDisplayed).length}
           />
         </Box>
       )}
@@ -154,7 +175,7 @@ export function FilamentsTable({
       {header}
       {shownSets.length === 0 && (
         <Typography color="text.secondary" sx={{ p: 2 }}>
-          No filaments match “{search.trim()}”
+          {noMatchText("filaments", search, shownOnly)}
         </Typography>
       )}
       {shownSets.length > 0 && (
@@ -189,6 +210,7 @@ export function FilamentsTable({
                       )}
                       sx={{
                         ...toggleRowSx,
+                        ...shownRowSx(!!selection?.visible),
                         backgroundColor: `${rgbaToHex(f.color)}${key === editedKey ? "50" : "20"}`,
                       }}
                     >
