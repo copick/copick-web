@@ -145,7 +145,7 @@ export function ViewerPane({
             pointerEvents: "none",
           }}
         >
-          Drag to rotate · scroll to zoom
+          Drag to rotate · Shift-drag or middle-drag to move · scroll to zoom
         </Box>
       )}
     </Box>

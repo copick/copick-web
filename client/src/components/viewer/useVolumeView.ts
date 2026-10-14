@@ -2,6 +2,10 @@
  * The 3D volume view: a VolumeLayer on the 3D viewport, created once the
  * slices have loaded (stage "volume") and only while the 3D pane is shown.
  * Defaults to the coarsest level.
+ *
+ * The layer is recreated when the level changes: idetik's VolumeLayer (0.35) caches its drawn chunks by chunk
+ * index without the level, and sets a chunk's size and position only when it first draws it, so after switching
+ * levels it kept drawing the new level's chunks at the old level's extent (the volume was shifted and scaled).
  */
 
 import { useEffect, useRef, type MutableRefObject } from "react";
@@ -64,9 +68,9 @@ export function useVolumeView({
       layerRef.current = null;
       if (volumeRef.current === volume) volumeRef.current = null;
     };
-    // Settings are applied below without recreating the layer.
+    // The other settings are applied below without recreating the layer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, scene]);
+  }, [active, scene, lod]);
 
   useEffect(() => {
     const volume = layerRef.current;
