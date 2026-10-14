@@ -14,16 +14,16 @@ from .fixtures.make_demo_project import PICKS, RUN, VOXEL_SIZE
 needs_filaments = pytest.mark.skipif(not compat.HAS_FILAMENTS, reason="copick without filaments")
 needs_seg_types = pytest.mark.skipif(not compat.HAS_SEG_TYPES, reason="copick without typed segmentations")
 
-PICKS_URL = f"/api/runs/{RUN}/picks/ribosome/alice/1"
+PICKS_URL = f"/api/projects/demo/runs/{RUN}/picks/ribosome/alice/1"
 
 
 def test_config_exposes_features(client):
-    body = client.get("/api/config").json()
+    body = client.get("/api/projects/demo/config").json()
     assert body["features"] == compat.features()
 
 
 def test_objects_report_filament_spec(client):
-    objects = {o["name"]: o for o in client.get("/api/objects").json()}
+    objects = {o["name"]: o for o in client.get("/api/projects/demo/objects").json()}
     assert objects["microtubule"]["is_filament"] is True
     assert objects["microtubule"]["filament"]["polar"] is True
     assert objects["ribosome"]["is_filament"] is False
@@ -41,7 +41,9 @@ def test_pick_points_carry_transformations(client):
 
 
 def test_picks_summary_counts_instances(client):
-    summary = next(p for p in client.get(f"/api/runs/{RUN}/picks").json() if p["object_name"] == "ribosome")
+    summary = next(
+        p for p in client.get(f"/api/projects/demo/runs/{RUN}/picks").json() if p["object_name"] == "ribosome"
+    )
     assert summary["instance_count"] == 3
     assert summary["is_filament"] is False
 
@@ -71,12 +73,12 @@ def test_saving_picks_rejects_bad_transformations(client):
 
 
 def test_tool_picks_stay_read_only(client):
-    assert client.put(f"/api/runs/{RUN}/picks/ribosome/alice/0", json={"points": []}).status_code == 403
+    assert client.put(f"/api/projects/demo/runs/{RUN}/picks/ribosome/alice/0", json={"points": []}).status_code == 403
 
 
 @needs_seg_types
 def test_segmentations_list_types_and_typed_urls(client):
-    segs = client.get(f"/api/runs/{RUN}/segmentations").json()
+    segs = client.get(f"/api/projects/demo/runs/{RUN}/segmentations").json()
     by_type = {s["segmentation_type"]: s for s in segs}
     assert set(by_type) == {"binary", "instance", "panoptic"}
     assert by_type["instance"]["is_instance"] and not by_type["instance"]["is_panoptic"]
@@ -84,9 +86,9 @@ def test_segmentations_list_types_and_typed_urls(client):
     assert by_type["binary"]["channels"] is None
     # The binary and the instance segmentation share name, user, session and voxel size: the type disambiguates.
     assert by_type["binary"]["zarr_url"] != by_type["instance"]["zarr_url"]
-    assert by_type["instance"]["zarr_url"].startswith("zarr/segmentation/instance/")  # relative to the app root
+    assert by_type["instance"]["zarr_url"].startswith("zarr/demo/segmentation/instance/")  # relative to the app root
 
-    only = client.get(f"/api/runs/{RUN}/segmentations", params={"segmentation_type": "instance"}).json()
+    only = client.get(f"/api/projects/demo/runs/{RUN}/segmentations", params={"segmentation_type": "instance"}).json()
     assert [s["segmentation_type"] for s in only] == ["instance"]
 
 
@@ -103,24 +105,24 @@ def _array_meta(client, base: str) -> dict:
 @needs_seg_types
 def test_typed_proxy_serves_the_right_store(client):
     """Regression: the store lookup was ambiguous once a binary and an instance segmentation shared a key."""
-    base = f"/zarr/segmentation/{{}}/{RUN}/ribosome/alice/1/{VOXEL_SIZE}"
+    base = f"/zarr/demo/segmentation/{{}}/{RUN}/ribosome/alice/1/{VOXEL_SIZE}"
     binary = _array_meta(client, base.format("binary"))
     instance = _array_meta(client, base.format("instance"))
     assert binary["dtype"] == "uint8"
     assert instance["dtype"] == "uint16"
 
-    legacy = _array_meta(client, f"/zarr/seg/{RUN}/ribosome/alice/1/{VOXEL_SIZE}")
+    legacy = _array_meta(client, f"/zarr/demo/seg/{RUN}/ribosome/alice/1/{VOXEL_SIZE}")
     assert legacy == binary  # the legacy alias serves binary/multilabel only
 
-    panoptic = _array_meta(client, f"/zarr/segmentation/panoptic/{RUN}/cell/alice/1/{VOXEL_SIZE}")
+    panoptic = _array_meta(client, f"/zarr/demo/segmentation/panoptic/{RUN}/cell/alice/1/{VOXEL_SIZE}")
     assert panoptic["shape"][0] == 2
-    assert client.get(f"/zarr/segmentation/bogus/{RUN}/cell/alice/1/{VOXEL_SIZE}/.zattrs").status_code == 404
-    assert client.get(f"/zarr/segmentation/binary/{RUN}/cell/alice/1/{VOXEL_SIZE}/.zattrs").status_code == 404
+    assert client.get(f"/zarr/demo/segmentation/bogus/{RUN}/cell/alice/1/{VOXEL_SIZE}/.zattrs").status_code == 404
+    assert client.get(f"/zarr/demo/segmentation/binary/{RUN}/cell/alice/1/{VOXEL_SIZE}/.zattrs").status_code == 404
 
 
 @needs_seg_types
 def test_instances_endpoint_measures_centroids(client):
-    url = f"/api/runs/{RUN}/segmentations/instance/ribosome/alice/1/{VOXEL_SIZE}/instances"
+    url = f"/api/projects/demo/runs/{RUN}/segmentations/instance/ribosome/alice/1/{VOXEL_SIZE}/instances"
     body = client.get(url, params={"level": 0}).json()
     assert body["level"] == 0
     by_id = {i["instance_id"]: i for i in body["instances"]}
@@ -138,7 +140,7 @@ def test_instances_endpoint_measures_centroids(client):
 
 @needs_seg_types
 def test_panoptic_instances_carry_labels(client):
-    url = f"/api/runs/{RUN}/segmentations/panoptic/cell/alice/1/{VOXEL_SIZE}/instances"
+    url = f"/api/projects/demo/runs/{RUN}/segmentations/panoptic/cell/alice/1/{VOXEL_SIZE}/instances"
     segments = client.get(url, params={"level": 0}).json()["instances"]
     pairs = {(s["label"], s["instance_id"]) for s in segments}
     assert pairs == {(1, 1), (1, 2), (1, 3), (2, 0)}
@@ -146,26 +148,26 @@ def test_panoptic_instances_carry_labels(client):
 
 @needs_filaments
 def test_filaments_list_and_detail(client):
-    sets = client.get(f"/api/runs/{RUN}/filaments").json()
+    sets = client.get(f"/api/projects/demo/runs/{RUN}/filaments").json()
     assert len(sets) == 1
     assert sets[0]["object_name"] == "microtubule"
     assert sets[0]["filament_count"] == 2
     assert sets[0]["instance_ids"] == [1, 2]
 
-    detail = client.get(f"/api/runs/{RUN}/filaments/microtubule/alice/1").json()
+    detail = client.get(f"/api/projects/demo/runs/{RUN}/filaments/microtubule/alice/1").json()
     first = detail["filaments"][0]
     assert first["instance_id"] == 1
     assert first["points"][0] == pytest.approx([20.0, 20.0, 20.0])
     assert first["radius"] == 125.0
     assert detail["filaments"][1]["radius"] is None
-    assert client.get(f"/api/runs/{RUN}/filaments/microtubule/bob/1").status_code == 404
+    assert client.get(f"/api/projects/demo/runs/{RUN}/filaments/microtubule/bob/1").status_code == 404
 
 
 # --- An older copick -------------------------------------------------------------------------------------------------
 
 
 def test_old_copick_turns_features_off(client, old_copick):
-    assert client.get("/api/config").json()["features"] == {
+    assert client.get("/api/projects/demo/config").json()["features"] == {
         "filaments": False,
         "segmentation_types": False,
         "pick_identity": False,
@@ -173,16 +175,16 @@ def test_old_copick_turns_features_off(client, old_copick):
 
 
 def test_old_copick_has_no_filaments(client, old_copick):
-    assert client.get(f"/api/runs/{RUN}/filaments").json() == []
-    assert client.get(f"/api/runs/{RUN}/filaments/microtubule/alice/1").status_code == 501
+    assert client.get(f"/api/projects/demo/runs/{RUN}/filaments").json() == []
+    assert client.get(f"/api/projects/demo/runs/{RUN}/filaments/microtubule/alice/1").status_code == 501
 
 
 def test_old_copick_still_serves_picks_and_objects(client, old_copick):
     assert client.get(PICKS_URL).status_code == 200
-    objects = {o["name"]: o for o in client.get("/api/objects").json()}
+    objects = {o["name"]: o for o in client.get("/api/projects/demo/objects").json()}
     # Read straight from metadata["copick"]["filament"], so older clients still see filament objects.
     assert objects["microtubule"]["is_filament"] is True
-    segs = client.get(f"/api/runs/{RUN}/segmentations").json()
+    segs = client.get(f"/api/projects/demo/runs/{RUN}/segmentations").json()
     assert all(s["segmentation_type"] in compat.SEGMENTATION_TYPES for s in segs)
 
 
@@ -216,7 +218,7 @@ def test_boundary_voxels_of_a_cube_across_slabs():
 
 @needs_seg_types
 def test_surface_endpoint_returns_boundary_points(client):
-    url = f"/api/runs/{RUN}/segmentations/instance/ribosome/alice/1/{VOXEL_SIZE}/surface"
+    url = f"/api/projects/demo/runs/{RUN}/segmentations/instance/ribosome/alice/1/{VOXEL_SIZE}/surface"
     response = client.get(url)
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/octet-stream"
@@ -239,20 +241,20 @@ def test_surface_endpoint_returns_boundary_points(client):
 
 @needs_seg_types
 def test_panoptic_surface_carries_label_and_instance(client):
-    url = f"/api/runs/{RUN}/segmentations/panoptic/cell/alice/1/{VOXEL_SIZE}/surface"
+    url = f"/api/projects/demo/runs/{RUN}/segmentations/panoptic/cell/alice/1/{VOXEL_SIZE}/surface"
     _, values, _, _, _ = _decode_surface(client.get(url).content)
     assert values.shape[1] == 2
     assert {tuple(map(int, v)) for v in np.unique(values, axis=0)} == {(1, 1), (1, 2), (1, 3), (2, 0)}
 
 
 def test_binary_surface_works_without_typed_segmentations(client):
-    url = f"/api/runs/{RUN}/segmentations/binary/ribosome/alice/1/{VOXEL_SIZE}/surface"
+    url = f"/api/projects/demo/runs/{RUN}/segmentations/binary/ribosome/alice/1/{VOXEL_SIZE}/surface"
     positions, values, _, _, _ = _decode_surface(client.get(url).content)
     assert len(positions) == 56 + 56 + 104 and set(np.unique(values)) == {1}
 
 
 def test_run_info_reports_paths_tomograms_and_contents(client, demo_config):
-    info = client.get(f"/api/runs/{RUN}/info").json()
+    info = client.get(f"/api/projects/demo/runs/{RUN}/info").json()
     assert info["name"] == RUN and info["backend"] == "CopickRootFSSpec"
     assert info["overlay_path"].endswith(f"ExperimentRuns/{RUN}") and info["portal"] is None
     assert info["counts"]["picks"] >= 1 and info["counts"]["segmentations"] >= 1
@@ -263,7 +265,7 @@ def test_run_info_reports_paths_tomograms_and_contents(client, demo_config):
     assert len(tomo["zarr"]["shape"]) == 3 and tomo["zarr"]["levels"] >= 1
     # nothing from the configuration's storage options
     assert "fs_args" not in json.dumps(info)
-    assert client.get("/api/runs/nope/info").status_code == 404
+    assert client.get("/api/projects/demo/runs/nope/info").status_code == 404
 
 
 def test_portal_dataset_id_from_paths():

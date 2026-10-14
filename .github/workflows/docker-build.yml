@@ -59,7 +59,7 @@ jobs:
           }
           EOF
           docker run -d --name copick-server -p 8000:8000 \
-            -e COPICK_CONFIG_PATH=/data/copick_config.json \
+            -e COPICK_CONFIG_PATHS='["/data/copick_config.json"]' \
             -v "$PWD/ci-copick-config.json:/data/copick_config.json:ro" \
             copick-web-server:ci
           echo "Waiting for server /health ..."

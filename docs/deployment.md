@@ -29,10 +29,9 @@ Edit `.env` to point to your copick config and data:
 
 ```bash
 # .env
-SERVER_HOST_PORT=8880
+PUBLIC_HOST_PORT=8880
 COPICK_CONFIG_PATH=/path/to/your/copick_config.json
 COPICK_DATA_DIR=/path/to/your/copick/data
-BASE_PATH=
 ```
 
 > **Important:** Paths inside your `copick_config.json` must reference `/data/copick_data`
@@ -44,7 +43,7 @@ BASE_PATH=
 podman compose -f compose-prod.yml up -d
 ```
 
-The app is now available at `http://<your-vm-ip>:8880` (or whichever port you set for `SERVER_HOST_PORT`).
+The app is now available at `http://<your-vm-ip>:8880` (or whichever port you set for `PUBLIC_HOST_PORT`).
 
 ### 5. Check status
 
@@ -64,13 +63,9 @@ podman compose -f compose-prod.yml up -d
 
 ## Running behind a reverse proxy
 
-Set `BASE_PATH` in `.env` to match your reverse proxy sub-path. The client container
-injects this at startup — no rebuild needed. (The client also finds its prefix at runtime from the page URL; see
-"Behind a proxy" in the README for running the `copick-web` command under a prefix, e.g. on Open OnDemand.)
-
-```bash
-# .env
-BASE_PATH=/viewer/copick-web
-```
-
+Nothing to configure: the client finds its URL prefix at runtime from the page URL, so the same image works under
+any sub-path (e.g. `/viewer/copick-web/`), including deep links to a project (`/viewer/copick-web/projects/<id>/`).
 The reverse proxy should strip the prefix when forwarding to copick-web.
+
+If your proxy forwards the prefix instead, set it as `BASE_PATH` in `.env` so the server accepts it (see "Behind a
+proxy" in the README, e.g. for Open OnDemand's `/node/<host>/<port>/`).

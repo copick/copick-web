@@ -18,6 +18,7 @@ import type {
   PicksDetailResponse,
   ReloadResponse,
   PicksSummaryResponse,
+  ProjectSummaryResponse,
   RunDetailResponse,
   RunInfoResponse,
   RunSummaryResponse,
@@ -28,14 +29,15 @@ import type {
 import { decodeSurfacePoints, type SurfacePoints } from "@/utils/surfacePoints";
 
 /**
- * Where the app is served from, found at runtime from the page URL (the app has no client-side routes, so the page
- * is always the app root): one build runs under any URL prefix, such as Open OnDemand's /rnode/<host>/<port>/.
+ * Where the app is served from, found at runtime: index.html sets the document's base to the app root (the page URL
+ * without its client route, e.g. `projects/<id>/`), so one build runs under any URL prefix, such as Open OnDemand's
+ * /rnode/<host>/<port>/ or a reverse proxy's /viewer/copick-web/.
  */
 export const APP_BASE = appBaseOf(
   typeof document === "undefined" ? "http://localhost/" : document.baseURI,
 );
 
-/** The app root for a page URL: its directory (the page is the root, with or without `index.html`). */
+/** The app root for a document base URL: its directory (with or without `index.html`). */
 export function appBaseOf(pageUrl: string): URL {
   return new URL(".", pageUrl);
 }
@@ -48,6 +50,9 @@ export function appUrl(path: string, base: URL = APP_BASE): string {
 export const API_BASE = appUrl("api");
 
 const enc = encodeURIComponent;
+
+/** API path prefix of a project's routes. */
+const project = (projectId: string) => `/projects/${enc(projectId)}`;
 
 async function fetchJson<T>(endpoint: string): Promise<T> {
   const response = await fetch(`${API_BASE}${endpoint}`);
@@ -139,75 +144,132 @@ async function deleteRequest(endpoint: string): Promise<void> {
   }
 }
 
-export const api = {
-  // Config endpoints
-  getConfig: () => fetchJson<ConfigResponse>("/config"),
+/** Path of a run's routes in a project. */
+const run = (projectId: string, runName: string) =>
+  `${project(projectId)}/runs/${enc(runName)}`;
 
-  getObjects: () => fetchJson<PickableObjectResponse[]>("/objects"),
+/** Path of one segmentation (type, name, user, session, voxel size) in a run. */
+const segmentation = (
+  projectId: string,
+  runName: string,
+  segType: SegmentationType,
+  name: string,
+  userId: string,
+  sessionId: string,
+  voxelSize: number,
+) =>
+  `${run(projectId, runName)}/segmentations/${segType}/${enc(name)}/${enc(userId)}/${enc(sessionId)}/${voxelSize}`;
+
+/** Path of one annotation set (object, user, session) of a kind (`picks`, `filaments`) in a run. */
+const annotation = (
+  projectId: string,
+  runName: string,
+  kind: "picks" | "filaments",
+  objectName: string,
+  userId: string,
+  sessionId: string,
+) =>
+  `${run(projectId, runName)}/${kind}/${enc(objectName)}/${enc(userId)}/${enc(sessionId)}`;
+
+export const api = {
+  // Project listing (no scope)
+  getProjects: () => fetchJson<ProjectSummaryResponse[]>("/projects"),
+
+  // Config endpoints
+  getConfig: (projectId: string) =>
+    fetchJson<ConfigResponse>(`${project(projectId)}/config`),
+
+  getObjects: (projectId: string) =>
+    fetchJson<PickableObjectResponse[]>(`${project(projectId)}/objects`),
 
   /** Re-open the project on the server, so runs, tomograms and annotations added since show up. */
-  reloadProject: () => requestJson<ReloadResponse>("POST", "/reload"),
+  reloadProject: (projectId: string) =>
+    requestJson<ReloadResponse>("POST", `${project(projectId)}/reload`),
 
   // Object types (configuration editing)
-  getObjectTypes: () =>
-    requestJson<ObjectTypesResponse>("GET", "/object-types"),
+  getObjectTypes: (projectId: string) =>
+    requestJson<ObjectTypesResponse>(
+      "GET",
+      `${project(projectId)}/object-types`,
+    ),
 
-  createObjectType: (version: string, fields: ObjectTypeFields) =>
-    requestJson<ObjectTypesResponse>("POST", "/object-types", {
-      version,
-      ...fields,
-    }),
+  createObjectType: (
+    projectId: string,
+    version: string,
+    fields: ObjectTypeFields,
+  ) =>
+    requestJson<ObjectTypesResponse>(
+      "POST",
+      `${project(projectId)}/object-types`,
+      { version, ...fields },
+    ),
 
-  updateObjectType: (version: string, name: string, fields: ObjectTypeFields) =>
-    requestJson<ObjectTypesResponse>("PUT", `/object-types/${enc(name)}`, {
-      version,
-      ...fields,
-    }),
+  updateObjectType: (
+    projectId: string,
+    version: string,
+    name: string,
+    fields: ObjectTypeFields,
+  ) =>
+    requestJson<ObjectTypesResponse>(
+      "PUT",
+      `${project(projectId)}/object-types/${enc(name)}`,
+      { version, ...fields },
+    ),
 
-  deleteObjectType: (version: string, name: string) =>
+  deleteObjectType: (projectId: string, version: string, name: string) =>
     requestJson<ObjectTypesResponse>(
       "DELETE",
-      `/object-types/${enc(name)}?version=${enc(version)}`,
+      `${project(projectId)}/object-types/${enc(name)}?version=${enc(version)}`,
     ),
 
   // Run endpoints
-  getRuns: () => fetchJson<RunSummaryResponse[]>("/runs"),
+  getRuns: (projectId: string) =>
+    fetchJson<RunSummaryResponse[]>(`${project(projectId)}/runs`),
 
-  getRunInfo: (runName: string) =>
-    fetchJson<RunInfoResponse>(`/runs/${enc(runName)}/info`),
+  getRunInfo: (projectId: string, runName: string) =>
+    fetchJson<RunInfoResponse>(`${run(projectId, runName)}/info`),
 
-  getRun: (runName: string) =>
-    fetchJson<RunDetailResponse>(`/runs/${encodeURIComponent(runName)}`),
+  getRun: (projectId: string, runName: string) =>
+    fetchJson<RunDetailResponse>(run(projectId, runName)),
+
+  /** URL of a run's gallery thumbnail (PNG). */
+  runThumbnailUrl: (projectId: string, runName: string, size: number) =>
+    `${API_BASE}${run(projectId, runName)}/thumbnail?size=${size}`,
 
   // Tomogram endpoints
-  getTomogram: (runName: string, voxelSize: number, tomoType: string) =>
+  getTomogram: (
+    projectId: string,
+    runName: string,
+    voxelSize: number,
+    tomoType: string,
+  ) =>
     fetchJson<TomogramResponse>(
-      `/runs/${encodeURIComponent(runName)}/voxel_spacings/${voxelSize}/tomograms/${encodeURIComponent(tomoType)}`,
+      `${run(projectId, runName)}/voxel_spacings/${voxelSize}/tomograms/${enc(tomoType)}`,
     ),
 
   // Picks endpoints
-  getPicks: (runName: string) =>
-    fetchJson<PicksSummaryResponse[]>(
-      `/runs/${encodeURIComponent(runName)}/picks`,
-    ),
+  getPicks: (projectId: string, runName: string) =>
+    fetchJson<PicksSummaryResponse[]>(`${run(projectId, runName)}/picks`),
 
   getPickPoints: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
     sessionId: string,
   ) =>
     fetchJson<PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      annotation(projectId, runName, "picks", objectName, userId, sessionId),
     ),
 
   // Segmentation endpoints
-  getSegmentations: (runName: string) =>
+  getSegmentations: (projectId: string, runName: string) =>
     fetchJson<SegmentationSummaryResponse[]>(
-      `/runs/${encodeURIComponent(runName)}/segmentations`,
+      `${run(projectId, runName)}/segmentations`,
     ),
 
   getInstances: (
+    projectId: string,
     runName: string,
     segType: SegmentationType,
     name: string,
@@ -217,11 +279,12 @@ export const api = {
     level = 1,
   ) =>
     fetchJson<InstancesResponse>(
-      `/runs/${enc(runName)}/segmentations/${segType}/${enc(name)}/${enc(userId)}/${enc(sessionId)}/${voxelSize}/instances?level=${level}`,
+      `${segmentation(projectId, runName, segType, name, userId, sessionId, voxelSize)}/instances?level=${level}`,
     ),
 
   /** Boundary voxels of a segmentation, for the 3D view. */
   getSurfacePoints: async (
+    projectId: string,
     runName: string,
     segType: SegmentationType,
     name: string,
@@ -231,25 +294,36 @@ export const api = {
   ): Promise<SurfacePoints> =>
     decodeSurfacePoints(
       await fetchBinary(
-        `/runs/${enc(runName)}/segmentations/${segType}/${enc(name)}/${enc(userId)}/${enc(sessionId)}/${voxelSize}/surface`,
+        `${segmentation(projectId, runName, segType, name, userId, sessionId, voxelSize)}/surface`,
       ),
     ),
 
   // Filaments endpoints
-  getFilaments: (runName: string) =>
-    fetchJson<FilamentsSummaryResponse[]>(`/runs/${enc(runName)}/filaments`),
+  getFilaments: (projectId: string, runName: string) =>
+    fetchJson<FilamentsSummaryResponse[]>(
+      `${run(projectId, runName)}/filaments`,
+    ),
 
   getFilamentDetail: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
     sessionId: string,
   ) =>
     fetchJson<FilamentsDetailResponse>(
-      `/runs/${enc(runName)}/filaments/${enc(objectName)}/${enc(userId)}/${enc(sessionId)}`,
+      annotation(
+        projectId,
+        runName,
+        "filaments",
+        objectName,
+        userId,
+        sessionId,
+      ),
     ),
 
   saveFilaments: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
@@ -258,11 +332,19 @@ export const api = {
   ) =>
     requestJson<SaveFilamentsResponse>(
       "PUT",
-      `/runs/${enc(runName)}/filaments/${enc(objectName)}/${enc(userId)}/${enc(sessionId)}`,
+      annotation(
+        projectId,
+        runName,
+        "filaments",
+        objectName,
+        userId,
+        sessionId,
+      ),
       data,
     ),
 
   deleteFilaments: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
@@ -270,17 +352,25 @@ export const api = {
   ) =>
     requestJson<{ deleted: boolean }>(
       "DELETE",
-      `/runs/${enc(runName)}/filaments/${enc(objectName)}/${enc(userId)}/${enc(sessionId)}`,
+      annotation(
+        projectId,
+        runName,
+        "filaments",
+        objectName,
+        userId,
+        sessionId,
+      ),
     ),
 
   // Picks mutation endpoints
-  createPicks: (runName: string, data: CreatePicksRequest) =>
+  createPicks: (projectId: string, runName: string, data: CreatePicksRequest) =>
     postJson<CreatePicksRequest, CreatePicksResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks`,
+      `${run(projectId, runName)}/picks`,
       data,
     ),
 
   updatePicks: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
@@ -288,17 +378,18 @@ export const api = {
     data: UpdatePicksRequest,
   ) =>
     putJson<UpdatePicksRequest, PicksDetailResponse>(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      annotation(projectId, runName, "picks", objectName, userId, sessionId),
       data,
     ),
 
   deletePicks: (
+    projectId: string,
     runName: string,
     objectName: string,
     userId: string,
     sessionId: string,
   ) =>
     deleteRequest(
-      `/runs/${encodeURIComponent(runName)}/picks/${encodeURIComponent(objectName)}/${encodeURIComponent(userId)}/${encodeURIComponent(sessionId)}`,
+      annotation(projectId, runName, "picks", objectName, userId, sessionId),
     ),
 };

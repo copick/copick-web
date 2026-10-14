@@ -11,7 +11,7 @@ from .fixtures.make_demo_project import RUN
 
 pytestmark = pytest.mark.skipif(not compat.HAS_FILAMENTS, reason="copick without filaments")
 
-BASE = f"/api/runs/{RUN}/filaments/microtubule"
+BASE = f"/api/projects/demo/runs/{RUN}/filaments/microtubule"
 
 
 def _curve(cps, kind="catmull-rom", step=10.0, **extra):
@@ -45,7 +45,7 @@ def test_save_regenerates_points_from_curves(client, service):
     assert sorted(int(f.instance_id) for f in stored.filaments) == [1, 4]
     assert next(f for f in stored.filaments if f.instance_id == 1).curve_is_current()
     # listed like any other set
-    assert any(s["user_id"] == "bob" for s in client.get(f"/api/runs/{RUN}/filaments").json())
+    assert any(s["user_id"] == "bob" for s in client.get(f"/api/projects/demo/runs/{RUN}/filaments").json())
 
 
 def test_save_replaces_the_set_and_writes_sampled_picks(client, service):
@@ -59,7 +59,7 @@ def test_save_replaces_the_set_and_writes_sampled_picks(client, service):
     assert response.status_code == 200, response.text
     assert [f["instance_id"] for f in response.json()["filaments"]["filaments"]] == [3]  # replaced, not merged
     assert response.json()["n_picks"] == 5  # 0, 100, ..., 400 Å
-    picks = client.get(f"/api/runs/{RUN}/picks/microtubule/bob/7").json()
+    picks = client.get(f"/api/projects/demo/runs/{RUN}/picks/microtubule/bob/7").json()
     assert len(picks["points"]) == 5 and {p["instance_id"] for p in picks["points"]} == {3}
 
 
@@ -78,7 +78,7 @@ def test_bspline_curves_are_accepted(client):
     [
         (f"{BASE}/bob/0", {"filaments": []}, 403),
         (f"{BASE}/bad user/1", {"filaments": []}, 422),
-        (f"/api/runs/{RUN}/filaments/nope/bob/1", {"filaments": []}, 422),
+        (f"/api/projects/demo/runs/{RUN}/filaments/nope/bob/1", {"filaments": []}, 422),
         (f"{BASE}/bob/1", {"filaments": [{"instance_id": 1, "points": [[0, 0, 0]]}]}, 422),
         (f"{BASE}/bob/1", {"filaments": [{"instance_id": 1, "curve": _curve([[0, 0, 0]])}]}, 422),
         (

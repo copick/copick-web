@@ -8,8 +8,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from copick_web.app.main import app as production_app
-from copick_web.app.services.copick_service import get_copick_service
 
+from .conftest import serving
 from .fixtures.make_demo_project import RUN, VOXEL_SIZE
 
 PREFIX = "/node/gpu-17/8123"
@@ -19,27 +19,24 @@ PREFIX = "/node/gpu-17/8123"
 def prefixed(service, monkeypatch):
     """The production app as started with ``--base-path PREFIX``."""
     monkeypatch.setattr(production_app, "root_path", PREFIX)
-    production_app.dependency_overrides[get_copick_service] = lambda: service
-    try:
+    with serving(production_app, service):
         yield TestClient(production_app, raise_server_exceptions=False)
-    finally:
-        production_app.dependency_overrides.pop(get_copick_service, None)
 
 
 @pytest.mark.parametrize("prefix", [PREFIX, ""], ids=["proxy forwards the prefix", "proxy strips the prefix"])
 def test_routes_with_or_without_the_prefix(prefixed, prefix):
-    assert prefixed.get(f"{prefix}/api/runs").status_code == 200
-    tomo = prefixed.get(f"{prefix}/api/runs/{RUN}/voxel_spacings/{VOXEL_SIZE}/tomograms/wbp").json()
+    assert prefixed.get(f"{prefix}/api/projects/demo/runs").status_code == 200
+    tomo = prefixed.get(f"{prefix}/api/projects/demo/runs/{RUN}/voxel_spacings/{VOXEL_SIZE}/tomograms/wbp").json()
     store = f"{prefix}/{tomo['zarr_url']}/0"  # level 0's array metadata, Zarr v2 or v3
     assert 200 in (prefixed.get(f"{store}/.zarray").status_code, prefixed.get(f"{store}/zarr.json").status_code)
 
 
 def test_store_urls_are_relative_to_the_app_root(client):
     """No prefix and no leading slash: the client resolves them against the page it was loaded from."""
-    tomo = client.get(f"/api/runs/{RUN}/voxel_spacings/{VOXEL_SIZE}/tomograms/wbp").json()
-    assert tomo["zarr_url"] == f"zarr/tomo/{RUN}/{VOXEL_SIZE}/wbp"
-    for seg in client.get(f"/api/runs/{RUN}/segmentations").json():
-        assert seg["zarr_url"].startswith("zarr/segmentation/")
+    tomo = client.get(f"/api/projects/demo/runs/{RUN}/voxel_spacings/{VOXEL_SIZE}/tomograms/wbp").json()
+    assert tomo["zarr_url"] == f"zarr/demo/tomo/{RUN}/{VOXEL_SIZE}/wbp"
+    for seg in client.get(f"/api/projects/demo/runs/{RUN}/segmentations").json():
+        assert seg["zarr_url"].startswith("zarr/demo/segmentation/")
 
 
 def test_cli_normalises_the_base_path(monkeypatch, demo_config):

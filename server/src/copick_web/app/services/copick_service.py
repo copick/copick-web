@@ -3,13 +3,14 @@
 import logging
 import math
 import threading
-from typing import Iterable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 import copick
 import numpy as np
 
 from . import compat
 from .cache import BoundedCache
+from .config_file import ConfigFile, LocalConfigFile
 from .object_types import ObjectTypesEditor
 from .thumbnails import thumbnail_size
 
@@ -31,36 +32,59 @@ def _same_voxel_size(a: float, b: float) -> bool:
 
 
 class CopickService:
-    """Service for accessing copick data."""
+    """Service for accessing one project's copick data.
+
+    Used by both project sources (local config and registry; see ``services/project_registry.py``). ``open_root``
+    opens the project's copick root, at startup and again on every reload; ``config_file`` is where its object types
+    are saved (None: they cannot be edited).
+
+    The zarr-store accessors serve the ``/zarr/{project_id}/...`` proxy. Local projects always use it; registry
+    projects publish ``data_url`` and the browser fetches their chunks directly (see ``services/zarr_urls.py``).
+    Server-side reads (thumbnails, instance measurements, surfaces) go through copick for both.
+    """
 
     def __init__(
         self,
-        config_path: str,
+        open_root: Callable[[], Any],
+        config_file: Optional[ConfigFile] = None,
         thumbnail_cache_bytes: int = 64 * _MB,
         measurement_cache_bytes: int = 512 * _MB,
         cache_max_age: Optional[float] = 3600,
     ):
-        """Initialize with a copick configuration file path.
+        """Open the project.
 
         Args:
+            open_root: Opens the project's copick root.
+            config_file: The project's configuration file, where object type changes are saved.
             thumbnail_cache_bytes: Size limit of the run gallery thumbnail cache.
             measurement_cache_bytes: Size limit of the instance measurement and segmentation surface cache.
             cache_max_age: Seconds after which cached entries are dropped (None: never).
         """
-        self.root = copick.from_file(config_path)
-        self.config_path = config_path
-        self.object_types = ObjectTypesEditor(self.root, config_path)
+        self._open_root = open_root
+        self.config_file = config_file
+        self.root = open_root()
+        self.object_types = ObjectTypesEditor(self.root, config_file)
         self.thumbnails: BoundedCache = BoundedCache(thumbnail_cache_bytes, cache_max_age, size_of=thumbnail_size)
         self._measurements: BoundedCache = BoundedCache(measurement_cache_bytes, cache_max_age)
         self._reload_lock = threading.Lock()
+        # Zarr-store mappers built from copick objects. The proxy hits these on every chunk fetch; caching avoids
+        # re-walking the copick tree and re-opening the fsspec mapper for each of the hundreds of chunks of a view.
+        self._stores: dict[tuple, Any] = {}
+        self._stores_lock = threading.Lock()
+
+    @classmethod
+    def from_config_path(cls, config_path: str, **cache_options) -> "CopickService":
+        """Open a project from a local configuration file (``cache_options``: see ``__init__``)."""
+        return cls(lambda: copick.from_file(config_path), LocalConfigFile(config_path), **cache_options)
 
     def reload(self) -> int:
-        """Re-open the project from its configuration file, like the desktop plugins' Reload.
+        """Re-open the project from its configuration, like the desktop plugins' Reload.
 
         copick keeps the runs and the entity lists it has read, so runs, tomograms and annotations added (or
         removed) by other tools only show up after this. The old root's filesystems are reconnected first, which
-        also drops fsspec's cached instances and directory listings, and the thumbnail and measurement caches are
-        cleared. If the configuration cannot be opened, the project stays as it was and the error is raised.
+        also drops fsspec's cached instances and directory listings (and a dead SSH connection), and the
+        thumbnail, measurement and store caches are cleared. If the configuration cannot be opened, the project
+        stays as it was and the error is raised.
 
         Returns:
             The number of runs.
@@ -72,11 +96,13 @@ class CopickService:
                     reconnect()
                 except Exception:  # noqa: BLE001  (the new root connects on its own)
                     logger.warning("Reconnecting the copick filesystems failed", exc_info=True)
-            root = copick.from_file(self.config_path)
+            root = self._open_root()
             self.root = root
-            self.object_types = ObjectTypesEditor(root, self.config_path)
+            self.object_types = ObjectTypesEditor(root, self.config_file)
             self.thumbnails.clear()
             self._measurements.clear()
+            with self._stores_lock:
+                self._stores.clear()
             return len(root.runs)
 
     def sweep_caches(self) -> int:
@@ -103,7 +129,22 @@ class CopickService:
 
     def get_runs(self) -> list[str]:
         """Get all run names."""
-        return [run.name for run in self.root.runs]
+        names = [run.name for run in self.root.runs]
+        if not names:
+            cfg = self.root.config
+            logger.warning(
+                "get_runs returned 0 runs. config_type=%s overlay_root=%s overlay_fs_args=%s "
+                "static_root=%s static_fs_args=%s explicit_runs=%s",
+                getattr(cfg, "config_type", None),
+                getattr(cfg, "overlay_root", None),
+                getattr(cfg, "overlay_fs_args", None),
+                getattr(cfg, "static_root", None),
+                getattr(cfg, "static_fs_args", None),
+                getattr(cfg, "runs", None),
+            )
+        else:
+            logger.debug("get_runs returned %d runs: %s", len(names), names[:5])
+        return names
 
     def get_run(self, name: str):
         """Get a run by name."""
@@ -136,12 +177,26 @@ class CopickService:
             return None
         return vs.get_tomogram(tomo_type)
 
+    def _cached_store(self, key: tuple, find: Callable[[], Any]):
+        """The zarr store of the copick object ``find`` returns (None if there is none), built once per key."""
+        with self._stores_lock:
+            cached = self._stores.get(key)
+        if cached is not None:
+            return cached
+        obj = find()
+        if not obj:
+            return None
+        store = obj.zarr()
+        with self._stores_lock:
+            # If another thread built one meanwhile, keep theirs (equivalent, but one canonical instance).
+            return self._stores.setdefault(key, store)
+
     def get_tomogram_zarr_store(self, run_name: str, voxel_size: float, tomo_type: str):
         """Get the zarr store for a tomogram."""
-        tomo = self.get_tomogram(run_name, voxel_size, tomo_type)
-        if not tomo:
-            return None
-        return tomo.zarr()
+        return self._cached_store(
+            ("tomo", run_name, voxel_size, tomo_type),
+            lambda: self.get_tomogram(run_name, voxel_size, tomo_type),
+        )
 
     def get_picks(
         self,
@@ -230,10 +285,10 @@ class CopickService:
         seg_type: Optional[str] = None,
     ):
         """Get the zarr store for a segmentation of the given type (``None``: binary or multilabel)."""
-        seg = self.get_segmentation(run_name, name, user_id, session_id, voxel_size, seg_type)
-        if seg is None:
-            return None
-        return seg.zarr()
+        return self._cached_store(
+            ("seg", run_name, name, user_id, session_id, voxel_size, seg_type),
+            lambda: self.get_segmentation(run_name, name, user_id, session_id, voxel_size, seg_type),
+        )
 
     # --- Instances ---
 
@@ -700,21 +755,3 @@ def measure_instances(store, panoptic: bool, level: int = 1, slab: int = 32) -> 
             {"instance_id": int(instance_id), "label": label, "voxel_count": int(n), "centroid": centroid}
         )
     return {"level": level, "voxel_size": float(scale[2]), "instances": instances_out}
-
-
-# Global service instance (set in main.py)
-copick_service: Optional[CopickService] = None
-
-
-def get_copick_service() -> CopickService:
-    """Get the global copick service instance."""
-    if copick_service is None:
-        raise RuntimeError("CopickService not initialized")
-    return copick_service
-
-
-def init_copick_service(config_path: str, **cache_options) -> CopickService:
-    """Initialize the global copick service (``cache_options``: see ``CopickService``)."""
-    global copick_service
-    copick_service = CopickService(config_path, **cache_options)
-    return copick_service
