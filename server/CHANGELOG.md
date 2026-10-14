@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.4](https://github.com/copick/copick-web/compare/server-v0.1.3...server-v0.1.4) (2026-10-14)
+
+
+### Features
+
+* multi-tenant with embrella integration ([#10](https://github.com/copick/copick-web/issues/10)) ([5cbd935](https://github.com/copick/copick-web/commit/5cbd935dbd6002fa98936989e0542088c8042c41))
+
 ## [0.1.3](https://github.com/copick/copick-web/compare/server-v0.1.2...server-v0.1.3) (2026-10-08)
 
 

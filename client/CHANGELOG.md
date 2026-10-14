@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.4](https://github.com/copick/copick-web/compare/client-v0.1.3...client-v0.1.4) (2026-10-14)
+
+
+### Features
+
+* multi-tenant with embrella integration ([#10](https://github.com/copick/copick-web/issues/10)) ([5cbd935](https://github.com/copick/copick-web/commit/5cbd935dbd6002fa98936989e0542088c8042c41))
+* reveal the open tomogram in the run tree ([#29](https://github.com/copick/copick-web/issues/29)) ([b82024c](https://github.com/copick/copick-web/commit/b82024c680f70249714475301707029593a6f06c))
+* show what is displayed, and which tomogram is open ([#30](https://github.com/copick/copick-web/issues/30)) ([d0aa751](https://github.com/copick/copick-web/commit/d0aa75189caab5ae7d4fcefe61f3aa8c94e402ec))
+
+
+### Bug Fixes
+
+* keep the 3D volume in place when changing its level; add keybinding help ([#31](https://github.com/copick/copick-web/issues/31)) ([a9c8934](https://github.com/copick/copick-web/commit/a9c8934fec8879e477a4da4a766c7f038e3e5463))
+
 ## [0.1.3](https://github.com/copick/copick-web/compare/client-v0.1.2...client-v0.1.3) (2026-10-08)
 
 
