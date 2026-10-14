@@ -13,3 +13,15 @@ export function matchesSearch(
     (f) => f !== null && f !== undefined && String(f).toLowerCase().includes(q),
   );
 }
+
+/** The message of an entity table whose search (and "shown only" filter) leaves no rows. */
+export function noMatchText(
+  what: string,
+  query: string,
+  shownOnly: boolean,
+): string {
+  const q = query.trim();
+  if (shownOnly && !q) return `None of the ${what} are shown`;
+  if (shownOnly) return `No shown ${what} match “${q}”`;
+  return `No ${what} match “${q}”`;
+}

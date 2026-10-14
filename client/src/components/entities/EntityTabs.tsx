@@ -1,9 +1,10 @@
 /**
  * Tabbed view for picks, segmentations and (on a copick with filaments)
- * filaments.
+ * filaments. Each tab counts what of it is shown in the viewer, and each table
+ * can be limited to those rows.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Box, Tabs, Tab, Typography } from "@mui/material";
 import { useCopick } from "@/contexts/CopickContext";
 import { useFeatures } from "@/api/hooks";
@@ -37,10 +38,18 @@ export function EntityTabs() {
     segmentations: "",
     filaments: "",
   });
+  const [shownOnly, setShownOnly] = useState({
+    picks: false,
+    segmentations: false,
+    filaments: false,
+  });
   const searchProps = (table: keyof typeof search) => ({
     search: search[table],
     onSearchChange: (value: string) =>
       setSearch((s) => ({ ...s, [table]: value })),
+    shownOnly: shownOnly[table],
+    onShownOnlyChange: (value: boolean) =>
+      setShownOnly((s) => ({ ...s, [table]: value })),
   });
   const { state } = useCopick();
   const features = useFeatures();
@@ -56,6 +65,11 @@ export function EntityTabs() {
   }
 
   const index = features.filaments ? tabIndex : Math.min(tabIndex, 1);
+  const shownCount = {
+    picks: state.selectedPicks.filter((p) => p.visible).length,
+    segmentations: state.selectedSegmentations.filter((s) => s.visible).length,
+    filaments: state.selectedFilaments.filter((f) => f.visible).length,
+  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -76,9 +90,17 @@ export function EntityTabs() {
           },
         }}
       >
-        <Tab label="Picks" />
-        <Tab label="Segmentations" />
-        {features.filaments && <Tab label="Filaments" />}
+        <Tab label={<TabLabel name="Picks" shown={shownCount.picks} />} />
+        <Tab
+          label={
+            <TabLabel name="Segmentations" shown={shownCount.segmentations} />
+          }
+        />
+        {features.filaments && (
+          <Tab
+            label={<TabLabel name="Filaments" shown={shownCount.filaments} />}
+          />
+        )}
       </Tabs>
       <TabPanel value={index} index={0}>
         <PicksPanel runName={state.selectedRunName} {...searchProps("picks")} />
@@ -96,6 +118,37 @@ export function EntityTabs() {
             {...searchProps("filaments")}
           />
         </TabPanel>
+      )}
+    </Box>
+  );
+}
+
+/** A tab's name and, when any are shown in the viewer, how many. */
+function TabLabel({ name, shown }: { name: string; shown: number }): ReactNode {
+  return (
+    <Box
+      component="span"
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}
+      title={shown ? `${shown} shown in the viewer` : undefined}
+    >
+      {name}
+      {shown > 0 && (
+        <Box
+          component="span"
+          aria-label={`${shown} shown`}
+          sx={{
+            px: 0.6,
+            minWidth: 18,
+            lineHeight: "18px",
+            borderRadius: 9,
+            fontSize: 11,
+            fontWeight: 600,
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+          }}
+        >
+          {shown}
+        </Box>
       )}
     </Box>
   );

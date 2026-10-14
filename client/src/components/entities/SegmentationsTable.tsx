@@ -42,10 +42,10 @@ import {
   type SegmentationIdentity,
 } from "@/contexts/CopickContext";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
-import { matchesSearch } from "@/utils/tableSearch";
+import { matchesSearch, noMatchText } from "@/utils/tableSearch";
 import { TableSearch } from "./TableSearch";
 import { EntityNameCell } from "./EntityNameCell";
-import { COL, entityTableSx, swatchSx } from "./entityTableStyles";
+import { COL, entityTableSx, shownRowSx, swatchSx } from "./entityTableStyles";
 import { useLayerStatus } from "@/contexts/LayerStatusContext";
 import { rgbaToHex } from "@/utils/colorUtils";
 import { InstanceBrowser } from "./InstanceBrowser";
@@ -55,6 +55,9 @@ interface SegmentationsTableProps {
   /** Search text (see TableSearch). */
   search: string;
   onSearchChange: (value: string) => void;
+  /** List only the rows shown in the viewer (see TableSearch). */
+  shownOnly: boolean;
+  onShownOnlyChange: (value: boolean) => void;
 }
 
 const TYPE_LABEL: Record<SegmentationType, string> = {
@@ -88,6 +91,8 @@ export function SegmentationsTable({
   runName,
   search,
   onSearchChange,
+  shownOnly,
+  onShownOnlyChange,
 }: SegmentationsTableProps) {
   const { data: segmentations, isLoading, error } = useSegmentations(runName);
   const {
@@ -127,8 +132,16 @@ export function SegmentationsTable({
   const present = SEGMENTATION_TYPES.filter((t) =>
     segmentations.some((s) => segmentationTypeOf(s) === t),
   );
+  const displayedKeys = new Set(
+    state.selectedSegmentations
+      .filter((s) => s.visible)
+      .map((s) => segmentationKey(s)),
+  );
+  const isDisplayed = (s: SegmentationSummaryResponse) =>
+    displayedKeys.has(segmentationKey(identityOf(s)));
   const shown = segmentations.filter(
     (s) =>
+      (!shownOnly || isDisplayed(s)) &&
       (filter.length === 0 || filter.includes(segmentationTypeOf(s))) &&
       matchesSearch(search, [
         s.name,
@@ -160,6 +173,9 @@ export function SegmentationsTable({
           what="segmentations"
           shown={shown.length}
           total={segmentations.length}
+          shownOnly={shownOnly}
+          onShownOnlyChange={onShownOnlyChange}
+          displayed={segmentations.filter(isDisplayed).length}
         />
       </Box>
       {present.length > 1 && (
@@ -184,8 +200,8 @@ export function SegmentationsTable({
       )}
       {shown.length === 0 && (
         <Typography color="text.secondary" sx={{ p: 2 }}>
-          {search.trim()
-            ? `No segmentations match “${search.trim()}”`
+          {search.trim() || shownOnly
+            ? noMatchText("segmentations", search, shownOnly)
             : "No segmentations of the selected types"}
         </Typography>
       )}
@@ -221,6 +237,7 @@ export function SegmentationsTable({
                     onDoubleClick={rowDoubleClick(() => handleToggle(seg))}
                     sx={{
                       ...toggleRowSx,
+                      ...shownRowSx(visible),
                       backgroundColor: `${rgbaToHex(color)}20`,
                     }}
                   >
