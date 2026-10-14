@@ -30,6 +30,7 @@ import { useScene } from "@/contexts/SceneContext";
 import { useSlice } from "@/contexts/SliceContext";
 import { AXES, VIEW_IDS, indexToWorld } from "@/idetik/coordinates";
 import type { MarkerStyle } from "@/idetik/PickMarkersLayer";
+import { CurrentTomogram } from "./CurrentTomogram";
 
 /** Slice axis (XYZ index) of each single-plane axis. */
 const SLICE_AXIS: Record<ViewAxis, number> = { xy: 2, xz: 1, yz: 0 };
@@ -71,6 +72,7 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
           Gallery
         </Button>
       </Tooltip>
+      <CurrentTomogram />
       <ToggleButtonGroup
         value={layout.mode}
         exclusive

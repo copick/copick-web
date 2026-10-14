@@ -2,9 +2,11 @@
  * Main content area with the tomogram viewer.
  */
 
+import { useEffect } from "react";
 import { Box, Typography } from "@mui/material";
 import { useTomogramSelection } from "@/contexts/CopickContext";
-import { useTomogram } from "@/api/hooks";
+import { useConfig, useTomogram } from "@/api/hooks";
+import { tomogramLabel } from "@/components/viewer/CurrentTomogram";
 import { TomogramViewer } from "@/components/viewer/TomogramViewer";
 import { RunGallery } from "@/components/gallery/RunGallery";
 import { useNavigation } from "@/contexts/NavigationContext";
@@ -15,6 +17,19 @@ export function MainContent() {
     useTomogramSelection();
 
   const { view } = useNavigation();
+  const { data: config } = useConfig();
+
+  // The browser tab names the shown tomogram (several sessions are often open side by side).
+  const label = tomogramLabel(
+    selectedRunName,
+    selectedVoxelSize,
+    selectedTomoType,
+  );
+  const project = config?.name ?? "Copick Web";
+  useEffect(() => {
+    document.title = label ? `${label} — ${project}` : project;
+  }, [label, project]);
+
   const { data: tomogram, isLoading } = useTomogram(
     selectedRunName,
     selectedVoxelSize,

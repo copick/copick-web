@@ -23,3 +23,16 @@ export function swatchSx(background: string) {
     flexShrink: 0,
   } as const;
 }
+
+/** Marks the rows of the entity tables that are shown in the viewer: a bar at their start (on the first cell, as
+ * table rows draw no shadow). */
+export function shownRowSx(shown: boolean) {
+  return shown
+    ? ({
+        "& > td:first-of-type": {
+          boxShadow: (theme: { palette: { primary: { main: string } } }) =>
+            `inset 3px 0 0 ${theme.palette.primary.main}`,
+        },
+      } as const)
+    : {};
+}
