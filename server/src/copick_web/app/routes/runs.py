@@ -4,6 +4,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
+from ..dependencies import get_copick_service, get_project_meta
 from ..models import (
     CreatePicksRequest,
     CreatePicksResponse,
@@ -12,6 +13,7 @@ from ..models import (
     PicksDetailResponse,
     PicksSummaryResponse,
     PointResponse,
+    ProjectSummaryResponse,
     RunDetailResponse,
     RunInfoResponse,
     RunSummaryResponse,
@@ -26,15 +28,16 @@ from ..services.copick_service import (
     DEFAULT_SURFACE_POINTS,
     CopickService,
     encode_surface_points,
-    get_copick_service,
 )
 from ..services.copick_service import _open_level as open_level
 from ..services.run_info import run_info
 from ..services.thumbnails import thumbnail
+from ..services.zarr_urls import segmentation_zarr_url, tomogram_zarr_url
 from ..validation import validate_copick_name
 
-router = APIRouter(prefix="/api", tags=["runs"])
+router = APIRouter(prefix="/api/projects/{project_id}", tags=["runs"])
 ServiceDependency = Annotated[CopickService, Depends(get_copick_service)]
+ProjectMetaDependency = Annotated[ProjectSummaryResponse, Depends(get_project_meta)]
 
 
 def _point_response(pt) -> PointResponse:
@@ -51,18 +54,6 @@ def _point_response(pt) -> PointResponse:
 def _is_filament_object(service: CopickService, object_name: str) -> bool:
     obj = service.get_pickable_object(object_name)
     return obj is not None and compat.filament_spec(obj) is not None
-
-
-# Store URLs are relative to the app root (no leading slash): the client resolves them against the page it was
-# loaded from, so they work under any URL prefix, whether the proxy strips it or forwards it.
-
-
-def segmentation_zarr_url(run_name: str, seg) -> str:
-    """The proxy URL of a segmentation store; the type is part of the path because it is part of the identity."""
-    return (
-        f"zarr/segmentation/{compat.seg_type(seg)}/{run_name}/{seg.name}/{seg.user_id}/"
-        f"{seg.session_id}/{seg.voxel_size}"
-    )
 
 
 @router.get("/runs", response_model=list[RunSummaryResponse])
@@ -126,6 +117,7 @@ def get_tomogram(
     voxel_size: float,
     tomo_type: str,
     service: ServiceDependency,
+    meta: ProjectMetaDependency,
 ) -> TomogramResponse:
     """Get tomogram details with zarr URL."""
     tomo = service.get_tomogram(run_name, voxel_size, tomo_type)
@@ -135,8 +127,7 @@ def get_tomogram(
             detail=f"Tomogram '{tomo_type}' not found for run '{run_name}' at voxel size {voxel_size}",
         )
 
-    # Return proxy URL for the zarr store
-    zarr_url = f"zarr/tomo/{run_name}/{voxel_size}/{tomo_type}"
+    zarr_url = tomogram_zarr_url(meta, service.root, run_name, voxel_size, tomo)
     return TomogramResponse(tomo_type=tomo_type, zarr_url=zarr_url)
 
 
@@ -160,7 +151,6 @@ def get_picks(
 
     result = []
     for pick in picks:
-        # Get color from pickable object
         obj = service.get_pickable_object(pick.pickable_object_name)
         color = obj.color if obj else (100, 100, 100, 255)
 
@@ -196,7 +186,6 @@ def get_pick_points(
             detail=f"Picks not found for object '{object_name}', user '{user_id}', session '{session_id}'",
         )
 
-    # Get color from pickable object
     obj = service.get_pickable_object(object_name)
     color = obj.color if obj else (100, 100, 100, 255)
 
@@ -222,7 +211,6 @@ def create_picks(
     service: ServiceDependency,
 ) -> CreatePicksResponse:
     """Create a new empty picks collection."""
-    # Validate all name fields using copick rules
     for field_name, value in [
         ("object_name", request.object_name),
         ("user_id", request.user_id),
@@ -262,7 +250,6 @@ def update_picks(
     service: ServiceDependency,
 ) -> PicksDetailResponse:
     """Update picks with new points."""
-    # Check if picks are editable (session_id != "0")
     if session_id == "0":
         raise HTTPException(status_code=403, detail="Tool picks (session_id='0') are read-only")
 
@@ -299,7 +286,6 @@ def delete_picks(
     service: ServiceDependency,
 ):
     """Delete a picks collection."""
-    # Check if picks are editable (session_id != "0")
     if session_id == "0":
         raise HTTPException(status_code=403, detail="Tool picks (session_id='0') are read-only")
 
@@ -316,6 +302,7 @@ def delete_picks(
 def get_segmentations(
     run_name: str,
     service: ServiceDependency,
+    meta: ProjectMetaDependency,
     name: Annotated[Optional[str], Query()] = None,
     user_id: Annotated[Optional[str], Query()] = None,
     session_id: Annotated[Optional[str], Query()] = None,
@@ -331,7 +318,6 @@ def get_segmentations(
 
     result = []
     for seg in segs:
-        # Get color from pickable object if it exists
         obj = service.get_pickable_object(seg.name)
         color = obj.color if obj else None
         kind = compat.seg_type(seg)
@@ -343,7 +329,7 @@ def get_segmentations(
                 session_id=seg.session_id,
                 voxel_size=seg.voxel_size,
                 is_multilabel=seg.is_multilabel,
-                zarr_url=segmentation_zarr_url(run_name, seg),
+                zarr_url=segmentation_zarr_url(meta, service.root, run_name, seg),
                 color=color,
                 segmentation_type=kind,
                 is_instance=kind == "instance",

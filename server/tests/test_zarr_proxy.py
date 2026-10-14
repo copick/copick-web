@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -14,9 +15,11 @@ from fastapi.testclient import TestClient
 from zarr.abc.store import OffsetByteRequest, RangeByteRequest, SuffixByteRequest
 from zarr.storage import LocalStore
 
+from copick_web.app.config import settings
+from copick_web.app.dependencies import get_copick_service, get_registry
 from copick_web.app.main import app as production_app
 from copick_web.app.routes.zarr_proxy import router
-from copick_web.app.services.copick_service import get_copick_service
+from copick_web.app.services.project_registry import ProjectRegistry
 
 
 @dataclass
@@ -57,6 +60,15 @@ class FakeService:
         return self.store
 
 
+def _proxy_app(service: Any, registry: ProjectRegistry | None = None) -> FastAPI:
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_copick_service] = lambda: service
+    registry = registry or ProjectRegistry()
+    app.dependency_overrides[get_registry] = lambda: registry
+    return app
+
+
 @pytest.fixture
 def app_and_store() -> tuple[FastAPI, RecordingStore]:
     store = RecordingStore(
@@ -67,9 +79,7 @@ def app_and_store() -> tuple[FastAPI, RecordingStore]:
             "empty": b"",
         }
     )
-    app = FastAPI()
-    app.include_router(router)
-    app.dependency_overrides[get_copick_service] = lambda: FakeService(store)
+    app = _proxy_app(FakeService(store))
     return app, store
 
 
@@ -81,7 +91,7 @@ def _client(app: FastAPI) -> TestClient:
 def test_full_get_preserves_object_bytes(app_and_store: tuple[FastAPI, RecordingStore], path: str) -> None:
     app, store = app_and_store
 
-    response = _client(app).get(f"/zarr/tomo/run/10.0/denoised/{path}")
+    response = _client(app).get(f"/zarr/demo/tomo/run/10.0/denoised/{path}")
 
     assert response.status_code == 200
     assert response.content == store.objects[path]
@@ -95,7 +105,7 @@ def test_full_get_preserves_object_bytes(app_and_store: tuple[FastAPI, Recording
 def test_head_reports_size_without_fetching_the_body(app_and_store: tuple[FastAPI, RecordingStore]) -> None:
     app, store = app_and_store
 
-    response = _client(app).head("/zarr/tomo/run/10.0/denoised/0/0/0")
+    response = _client(app).head("/zarr/demo/tomo/run/10.0/denoised/0/0/0")
 
     assert response.status_code == 200
     assert response.content == b""
@@ -127,7 +137,7 @@ def test_single_ranges_are_served_with_bounded_store_reads(
     app, store = app_and_store
 
     response = _client(app).get(
-        "/zarr/tomo/run/10.0/denoised/0/0/0",
+        "/zarr/demo/tomo/run/10.0/denoised/0/0/0",
         headers={"Range": range_header},
     )
 
@@ -158,7 +168,7 @@ def test_invalid_and_unsatisfiable_ranges_do_not_read_the_object(
     app, store = app_and_store
 
     response = _client(app).get(
-        "/zarr/tomo/run/10.0/denoised/0/0/0",
+        "/zarr/demo/tomo/run/10.0/denoised/0/0/0",
         headers={"Range": range_header},
     )
 
@@ -176,9 +186,9 @@ def test_zero_length_object_supports_get_and_head_but_not_range(
     app, store = app_and_store
     client = _client(app)
 
-    full = client.get("/zarr/tomo/run/10.0/denoised/empty")
-    head = client.head("/zarr/tomo/run/10.0/denoised/empty")
-    partial = client.get("/zarr/tomo/run/10.0/denoised/empty", headers={"Range": "bytes=0-"})
+    full = client.get("/zarr/demo/tomo/run/10.0/denoised/empty")
+    head = client.head("/zarr/demo/tomo/run/10.0/denoised/empty")
+    partial = client.get("/zarr/demo/tomo/run/10.0/denoised/empty", headers={"Range": "bytes=0-"})
 
     assert (full.status_code, full.content, full.headers["content-length"]) == (200, b"", "0")
     assert (head.status_code, head.content, head.headers["content-length"]) == (200, b"", "0")
@@ -191,8 +201,8 @@ def test_zero_length_object_supports_get_and_head_but_not_range(
 @pytest.mark.parametrize(
     "url",
     [
-        "/zarr/tomo/run/10.0/denoised/missing",
-        "/zarr/seg/run/membrane/user/session/10.0/missing",
+        "/zarr/demo/tomo/run/10.0/denoised/missing",
+        "/zarr/demo/seg/run/membrane/user/session/10.0/missing",
     ],
 )
 def test_missing_objects_are_404(app_and_store: tuple[FastAPI, RecordingStore], method: str, url: str) -> None:
@@ -206,8 +216,8 @@ def test_missing_objects_are_404(app_and_store: tuple[FastAPI, RecordingStore], 
 @pytest.mark.parametrize(
     "url",
     [
-        "/zarr/tomo/run/10.0/denoised/0/0/0",
-        "/zarr/seg/run/membrane/user/session/10.0/0/0/0",
+        "/zarr/demo/tomo/run/10.0/denoised/0/0/0",
+        "/zarr/demo/seg/run/membrane/user/session/10.0/0/0/0",
     ],
 )
 def test_tomogram_and_segmentation_routes_have_range_parity(
@@ -223,13 +233,11 @@ def test_tomogram_and_segmentation_routes_have_range_parity(
 
 
 def test_missing_resources_are_404() -> None:
-    app = FastAPI()
-    app.include_router(router)
-    app.dependency_overrides[get_copick_service] = lambda: FakeService(None)
+    app = _proxy_app(FakeService(None))
     client = _client(app)
 
-    assert client.get("/zarr/tomo/run/10.0/denoised/zarr.json").status_code == 404
-    assert client.get("/zarr/seg/run/membrane/user/session/10.0/zarr.json").status_code == 404
+    assert client.get("/zarr/demo/tomo/run/10.0/denoised/zarr.json").status_code == 404
+    assert client.get("/zarr/demo/seg/run/membrane/user/session/10.0/zarr.json").status_code == 404
 
 
 def test_backend_failures_are_not_reclassified_as_missing() -> None:
@@ -237,11 +245,9 @@ def test_backend_failures_are_not_reclassified_as_missing() -> None:
         async def get(self, key: str, prototype: Any, byte_range: Any = None):
             raise PermissionError("backend credentials were rejected")
 
-    app = FastAPI()
-    app.include_router(router)
-    app.dependency_overrides[get_copick_service] = lambda: FakeService(FailingStore({"zarr.json": b"{}"}))
+    app = _proxy_app(FakeService(FailingStore({"zarr.json": b"{}"})))
 
-    response = _client(app).get("/zarr/tomo/run/10.0/denoised/zarr.json")
+    response = _client(app).get("/zarr/demo/tomo/run/10.0/denoised/zarr.json")
 
     assert response.status_code == 500
 
@@ -253,16 +259,14 @@ def test_canonical_copick_shard_is_served_from_a_real_zarr_store(tmp_path: Path)
     write_ome_zarr_3d(str(zarr_path), {10.0: values}, chunk_size=(2, 3, 4))
     store = LocalStore(zarr_path, read_only=True)
 
-    app = FastAPI()
-    app.include_router(router)
-    app.dependency_overrides[get_copick_service] = lambda: FakeService(store)
+    app = _proxy_app(FakeService(store))
     client = _client(app)
 
-    root_metadata = client.get("/zarr/tomo/run/10.0/denoised/zarr.json")
-    array_metadata = client.get("/zarr/tomo/run/10.0/denoised/0/zarr.json")
-    shard_head = client.head("/zarr/tomo/run/10.0/denoised/0/0/0/0")
+    root_metadata = client.get("/zarr/demo/tomo/run/10.0/denoised/zarr.json")
+    array_metadata = client.get("/zarr/demo/tomo/run/10.0/denoised/0/zarr.json")
+    shard_head = client.head("/zarr/demo/tomo/run/10.0/denoised/0/0/0/0")
     shard_tail = client.get(
-        "/zarr/tomo/run/10.0/denoised/0/0/0/0",
+        "/zarr/demo/tomo/run/10.0/denoised/0/0/0/0",
         headers={"Range": "bytes=-64"},
     )
 
@@ -279,10 +283,12 @@ def test_canonical_copick_shard_is_served_from_a_real_zarr_store(tmp_path: Path)
 
 def test_browser_cors_exposes_range_response_headers() -> None:
     store = RecordingStore({"0/0/0": b"0123456789"})
+    registry = ProjectRegistry()
     production_app.dependency_overrides[get_copick_service] = lambda: FakeService(store)
+    production_app.dependency_overrides[get_registry] = lambda: registry
     try:
         response = _client(production_app).get(
-            "/zarr/tomo/run/10.0/denoised/0/0/0",
+            "/zarr/demo/tomo/run/10.0/denoised/0/0/0",
             headers={
                 "Origin": "http://localhost:5173",
                 "Range": "bytes=2-5",
@@ -290,8 +296,28 @@ def test_browser_cors_exposes_range_response_headers() -> None:
         )
     finally:
         production_app.dependency_overrides.pop(get_copick_service, None)
+        production_app.dependency_overrides.pop(get_registry, None)
 
     assert response.status_code == 206
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
     exposed = {header.strip().lower() for header in response.headers["access-control-expose-headers"].split(",")}
     assert {"accept-ranges", "content-length", "content-range"} <= exposed
+
+
+def test_a_stuck_read_times_out_and_evicts_the_project(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A read that outlasts the timeout is a 504 and evicts the project, so the next request reconnects."""
+
+    class StuckStore(RecordingStore):
+        async def get(self, key: str, prototype: Any, byte_range: Any = None):
+            await asyncio.sleep(10)
+
+    monkeypatch.setattr(settings, "zarr_read_timeout_seconds", 0.05)
+    registry = ProjectRegistry()
+    evicted: list[str] = []
+    monkeypatch.setattr(registry, "evict_service", evicted.append)
+    app = _proxy_app(FakeService(StuckStore({"zarr.json": b"{}"})), registry)
+
+    response = _client(app).get("/zarr/demo/tomo/run/10.0/denoised/zarr.json")
+
+    assert response.status_code == 504
+    assert evicted == ["demo"]

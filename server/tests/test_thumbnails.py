@@ -53,11 +53,11 @@ def test_best_tomogram_follows_the_desktop_rule():
 
 
 def test_thumbnail_endpoint(client):
-    response = client.get(f"/api/runs/{RUN}/thumbnail", params={"size": 64})
+    response = client.get(f"/api/projects/demo/runs/{RUN}/thumbnail", params={"size": 64})
     assert response.status_code == 200 and response.headers["content-type"] == "image/png"
     assert response.headers["x-copick-tomo-type"] and response.headers["x-copick-voxel-size"]
     (w, h), pixels = _png_size_and_pixels(response.content)
     assert max(w, h) <= 64 and pixels.max() > pixels.min()  # contrast-stretched, not blank
-    again = client.get(f"/api/runs/{RUN}/thumbnail", params={"size": 64})
+    again = client.get(f"/api/projects/demo/runs/{RUN}/thumbnail", params={"size": 64})
     assert again.content == response.content  # cached
-    assert client.get("/api/runs/nope/thumbnail").status_code == 404
+    assert client.get("/api/projects/demo/runs/nope/thumbnail").status_code == 404
