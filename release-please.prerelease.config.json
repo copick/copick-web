@@ -1,4 +1,5 @@
 {
+  "group-pull-request-title-pattern": "chore${scope}: release copick-web",
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
