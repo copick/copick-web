@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-alpha.1](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha...client-v1.0.0-alpha.1) (2026-10-15)
+
+
+### Features
+
+* reveal the open tomogram in the run tree ([#32](https://github.com/copick/copick-web/issues/32)) ([563553a](https://github.com/copick/copick-web/commit/563553ae9ff2489bdb4cff9c2cffae8d791c34ec))
+* show what is displayed, and which tomogram is open ([#33](https://github.com/copick/copick-web/issues/33)) ([63848ec](https://github.com/copick/copick-web/commit/63848eca270f7ce65a2a1a1f1c64f33f7c610548))
+
+
+### Bug Fixes
+
+* keep the 3D volume in place when changing its level; add keybinding help ([#34](https://github.com/copick/copick-web/issues/34)) ([0e8cdaf](https://github.com/copick/copick-web/commit/0e8cdaf5c03a73e6ea03ff97dc6712bb819fcd7b))
+
 ## [1.0.0-alpha](https://github.com/copick/copick-web/compare/client-v0.1.2...client-v1.0.0-alpha) (2026-10-08)
 
 

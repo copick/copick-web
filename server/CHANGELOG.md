@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.1](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha...server-v1.0.0-alpha.1) (2026-10-15)
+
+
+### Miscellaneous Chores
+
+* **server:** Synchronize copick-web versions
+
 ## [1.0.0-alpha](https://github.com/copick/copick-web/compare/server-v0.1.2...server-v1.0.0-alpha) (2026-10-08)
 
 
