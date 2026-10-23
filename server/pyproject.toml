@@ -30,6 +30,10 @@ dev = [
 [project.scripts]
 copick-web = "copick_web.cli:main"
 
+[tool.hatch.build]
+# The client build is gitignored; ship it anyway when present (`npm run build:server` in client/).
+artifacts = ["src/copick_web/static"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/copick_web"]
 
