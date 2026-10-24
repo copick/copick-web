@@ -153,7 +153,12 @@ export function FilamentsTable({
     return (
       <Box>
         {header}
-        <Typography color="text.secondary" sx={{ p: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           No filaments found
         </Typography>
       </Box>
@@ -174,7 +179,12 @@ export function FilamentsTable({
     <Box>
       {header}
       {shownSets.length === 0 && (
-        <Typography color="text.secondary" sx={{ p: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           {noMatchText("filaments", search, shownOnly)}
         </Typography>
       )}
@@ -376,7 +386,13 @@ function FilamentList({
             <Typography variant="body2" sx={{ flexGrow: 1 }}>
               #{f.instance_id}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+                mr: 1,
+              }}
+            >
               {(length / 10).toFixed(0)} nm
               {f.curve_kind ? ` · ${f.curve_kind}` : ""}
             </Typography>

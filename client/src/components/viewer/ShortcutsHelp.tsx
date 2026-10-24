@@ -172,8 +172,10 @@ export function ShortcutsHelp() {
                 >
                   <Typography
                     variant="body2"
-                    color="text.secondary"
-                    sx={{ fontSize: 12.5 }}
+                    sx={{
+                      color: "text.secondary",
+                      fontSize: 12.5,
+                    }}
                   >
                     {action}
                   </Typography>

@@ -113,7 +113,12 @@ export function RunInfoDialog({
                 title={`Voxel spacing ${vs.voxel_size.toFixed(2)} Å`}
               >
                 {vs.tomograms.length === 0 && (
-                  <Typography variant="body2" color="text.secondary">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: "text.secondary",
+                    }}
+                  >
                     No tomograms
                   </Typography>
                 )}
@@ -210,9 +215,12 @@ function PathRow({
     <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
       <Typography
         variant="body2"
-        color="text.secondary"
-        sx={{ width: 64, flexShrink: 0 }}
         title={hint}
+        sx={{
+          color: "text.secondary",
+          width: 64,
+          flexShrink: 0,
+        }}
       >
         {label}
       </Typography>
@@ -290,7 +298,13 @@ function TomogramCard({
         </Button>
       </Box>
       {facts.length > 0 && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            mb: 0.5,
+          }}
+        >
           {facts.join(" · ")}
         </Typography>
       )}
@@ -314,7 +328,12 @@ function TomogramCard({
         </Typography>
       )}
       {p?.authors && p.authors.length > 0 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {p.authors.join(", ")}
         </Typography>
       )}

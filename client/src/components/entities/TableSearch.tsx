@@ -53,35 +53,40 @@ export function TableSearch({
           if (e.key === "Escape") onChange("");
         }}
         placeholder={`Search ${what}…`}
-        inputProps={{ "aria-label": `Search ${what}` }}
         sx={{ flexGrow: 1, minWidth: 0, "& .MuiInputBase-input": { py: 0.5 } }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-          endAdornment: filtered ? (
-            <InputAdornment position="end">
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ mr: 0.5 }}
-              >
-                {shown}/{total}
-              </Typography>
-              {value && (
-                <IconButton
-                  size="small"
-                  aria-label="Clear search"
-                  onClick={() => onChange("")}
-                  edge="end"
+        slotProps={{
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: filtered ? (
+              <InputAdornment position="end">
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    mr: 0.5,
+                  }}
                 >
-                  <ClearIcon fontSize="small" />
-                </IconButton>
-              )}
-            </InputAdornment>
-          ) : undefined,
+                  {shown}/{total}
+                </Typography>
+                {value && (
+                  <IconButton
+                    size="small"
+                    aria-label="Clear search"
+                    onClick={() => onChange("")}
+                    edge="end"
+                  >
+                    <ClearIcon fontSize="small" />
+                  </IconButton>
+                )}
+              </InputAdornment>
+            ) : undefined,
+          },
+
+          htmlInput: { "aria-label": `Search ${what}` },
         }}
       />
       {onShownOnlyChange && (

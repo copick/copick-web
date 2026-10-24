@@ -25,6 +25,7 @@ import {
   MenuItem,
   Slider,
   TextField,
+  type TextFieldProps,
   Typography,
 } from "@mui/material";
 import { Add as AddIcon } from "@mui/icons-material";
@@ -181,7 +182,7 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
   const field = (
     key: keyof ObjectTypeForm,
     label: string,
-    extra: Record<string, unknown> = {},
+    extra: Partial<TextFieldProps> = {},
   ) => (
     <TextField
       size="small"
@@ -189,9 +190,7 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
       value={form?.[key] ?? ""}
       onChange={(e) => set(key, e.target.value as never)}
       error={!!errors[key]}
-      helperText={
-        errors[key] ?? (extra.helperText as string | undefined) ?? " "
-      }
+      helperText={errors[key] ?? extra.helperText ?? " "}
       disabled={!editable}
       fullWidth
       {...extra}
@@ -203,7 +202,13 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
       <DialogTitle sx={{ pb: 1 }}>
         Object types
         {data?.config_file && (
-          <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+              ml: 1,
+            }}
+          >
             {data.config_file}
           </Typography>
         )}
@@ -276,7 +281,9 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
                             ? "particle"
                             : "segmentation"
                       }`}
-                      primaryTypographyProps={{ noWrap: true }}
+                      slotProps={{
+                        primary: { noWrap: true },
+                      }}
                     />
                   </ListItemButton>
                 ))}
@@ -338,7 +345,7 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
                 {field("label", "Label", {
                   required: true,
                   type: "number",
-                  inputProps: { min: 1, step: 1 },
+                  slotProps: { htmlInput: { min: 1, step: 1 } },
                 })}
               </Box>
               {renamed && (
@@ -357,7 +364,12 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
                   flexWrap: "wrap",
                 }}
               >
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                  }}
+                >
                   Colour
                 </Typography>
                 <Box
@@ -378,7 +390,12 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
                     cursor: "pointer",
                   }}
                 />
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                  }}
+                >
                   Opacity
                 </Typography>
                 <Slider
