@@ -69,7 +69,7 @@ jobs:
             type=raw,value=alpha,enable=${{ inputs.prerelease }}
             type=raw,value=latest,enable=${{ !inputs.prerelease }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./server
           platforms: linux/amd64
@@ -107,7 +107,7 @@ jobs:
             type=raw,value=alpha,enable=${{ inputs.prerelease }}
             type=raw,value=latest,enable=${{ !inputs.prerelease }}
 
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: client/Dockerfile
