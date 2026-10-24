@@ -5,11 +5,11 @@
  * overlays, the layer rebuilds only when its slice changes.
  */
 
-import { Layer, Points, type SliceCoordinates } from "@idetik/core";
+import type { SliceCoordinates } from "@idetik/core";
 import { vec3 } from "gl-matrix";
 import { AXES, planeAxes, type Plane, type XYZ } from "./coordinates";
+import { PointsLayer, type PointProps } from "./PointsLayer";
 
-type PointProps = ConstructorParameters<typeof Points>[0][number];
 type Rgba255 = [number, number, number, number];
 
 export interface FilamentHandle {
@@ -30,7 +30,7 @@ export interface FilamentHandlesOptions {
 const SIZE = 7;
 const ACTIVE_SIZE = 10;
 
-export class FilamentHandlesLayer extends Layer {
+export class FilamentHandlesLayer extends PointsLayer {
   public readonly type = "FilamentHandlesLayer";
 
   private readonly options_: FilamentHandlesOptions;
@@ -38,16 +38,18 @@ export class FilamentHandlesLayer extends Layer {
   private built_ = false;
 
   constructor(options: FilamentHandlesOptions) {
-    super({ blendMode: "normal" });
+    super({ depthTest: false });
     this.options_ = options;
     this.update();
     this.setState("ready");
   }
 
-  update(): void {
+  update(): boolean {
     const { view, sliceCoords } = this.options_;
     const slice = sliceCoords[AXES[planeAxes[view][2]]] ?? 0;
-    if (!this.built_ || slice !== this.lastSlice_) this.rebuild(slice);
+    if (this.built_ && slice === this.lastSlice_) return false;
+    this.rebuild(slice);
+    return true;
   }
 
   private rebuild(slice: number): void {
@@ -86,11 +88,6 @@ export class FilamentHandlesLayer extends Layer {
         add(onPlane, c as [number, number, number, number], size);
       }
     }
-    this.clearObjects();
-    if (props.length > 0) {
-      const object = new Points(props);
-      object.depthTest = false;
-      this.addObject(object);
-    }
+    this.setPoints(props);
   }
 }

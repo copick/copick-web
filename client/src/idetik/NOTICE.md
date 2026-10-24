@@ -27,4 +27,4 @@ SOFTWARE.
 
 @idetik/core is MIT licensed, Copyright 2026 Chan Zuckerberg Biohub, Inc.
 `ChannelViewSource.ts` relies on idetik internals (the chunk loader contract
-and LabelLayer's colour cycle); the dependency is pinned to exactly 0.35.0.
+and LabelLayer's colour cycle); the dependency is pinned to an exact version (0.49.0).

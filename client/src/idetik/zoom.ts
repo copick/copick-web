@@ -4,11 +4,10 @@
  * (world units) once that is larger on screen than its minimum pixel size.
  */
 
-import type { Layer } from "@idetik/core";
+import type { Viewport } from "@idetik/core";
 import type { XYZ } from "./coordinates";
 
-/** Idetik's Viewport (not exported by the package). */
-export type Viewport = NonNullable<Parameters<Layer["update"]>[0]>;
+export type { Viewport };
 
 /** Largest marker drawn, in CSS pixels (GPUs clamp point sizes anyway). */
 export const MAX_MARKER_PIXELS = 160;
@@ -26,7 +25,7 @@ export function pixelsPerWorldUnit(
 ): number | null {
   if (!viewport) return null;
   const camera = viewport.camera;
-  const element = viewport.element;
+  const element = viewport.domElement;
   if (camera.type === "OrthographicCamera") {
     const rect = (
       camera as unknown as {
