@@ -47,19 +47,25 @@ export function InstanceBrowser({ runName, identity }: InstanceBrowserProps) {
   );
   const panoptic = identity.segmentationType === "panoptic";
 
+  const identityName = identity.name;
   const objectName = useMemo(() => {
     const names = new Map<number, string>();
     for (const o of objects ?? [])
       if (o.label !== null) names.set(o.label, o.name);
     return (label: number | null) =>
-      label === null ? identity.name : (names.get(label) ?? `label ${label}`);
-  }, [objects, identity.name]);
+      label === null ? identityName : (names.get(label) ?? `label ${label}`);
+  }, [objects, identityName]);
 
   if (isLoading) {
     return (
       <Box sx={{ p: 1, display: "flex", alignItems: "center", gap: 1 }}>
         <CircularProgress size={14} />
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           Measuring instances…
         </Typography>
       </Box>
@@ -80,8 +86,11 @@ export function InstanceBrowser({ runName, identity }: InstanceBrowserProps) {
     return (
       <Typography
         variant="caption"
-        color="text.secondary"
-        sx={{ p: 1, display: "block" }}
+        sx={{
+          color: "text.secondary",
+          p: 1,
+          display: "block",
+        }}
       >
         No instances.
       </Typography>
@@ -96,7 +105,13 @@ export function InstanceBrowser({ runName, identity }: InstanceBrowserProps) {
 
   return (
     <Box sx={{ maxHeight: 220, overflow: "auto" }}>
-      <Typography variant="caption" color="text.secondary" sx={{ px: 1 }}>
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+          px: 1,
+        }}
+      >
         {data.instances.length} {panoptic ? "segments" : "instances"} · level{" "}
         {data.level}
       </Typography>
@@ -141,8 +156,10 @@ export function InstanceBrowser({ runName, identity }: InstanceBrowserProps) {
               </Typography>
               <Typography
                 variant="caption"
-                color="text.secondary"
-                sx={{ mx: 0.5 }}
+                sx={{
+                  color: "text.secondary",
+                  mx: 0.5,
+                }}
               >
                 {inst.voxel_count.toLocaleString()}
               </Typography>

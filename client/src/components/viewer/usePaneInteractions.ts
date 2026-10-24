@@ -9,7 +9,7 @@
  * Shift+wheel slicing convention.
  */
 
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, type MutableRefObject } from "react";
 import {
   PLANES,
   planeAxes,
@@ -17,6 +17,7 @@ import {
   type XYZ,
 } from "@/idetik/coordinates";
 import type { Scene } from "@/contexts/SceneContext";
+import { useLatestRef } from "@/utils/useLatestRef";
 
 interface Options {
   scene: Scene | null;
@@ -36,10 +37,8 @@ export function usePaneInteractions({
   setIndices,
   allowFocusRef,
 }: Options) {
-  const stepRef = useRef(step);
-  stepRef.current = step;
-  const setIndicesRef = useRef(setIndices);
-  setIndicesRef.current = setIndices;
+  const stepRef = useLatestRef(step);
+  const setIndicesRef = useLatestRef(setIndices);
   const visibleKey = visible.map(Number).join("");
 
   useEffect(() => {

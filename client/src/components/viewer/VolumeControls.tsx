@@ -40,7 +40,12 @@ export function VolumeControls({
         3D
       </Typography>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           Threshold
         </Typography>
         <Slider
@@ -55,7 +60,12 @@ export function VolumeControls({
         />
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           Opacity
         </Typography>
         <Slider

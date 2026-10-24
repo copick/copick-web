@@ -3,7 +3,8 @@
  * filament and its actions, insert mode, undo / redo and saving.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Alert,
   Box,
@@ -24,7 +25,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
-  AddCircleOutline as NewFilamentIcon,
+  AddCircleOutlined as NewFilamentIcon,
   ChevronLeft,
   ChevronRight,
   Close as CloseIcon,
@@ -215,9 +216,11 @@ export function FilamentEditToolbar() {
         value={ed.insertMode}
         onChange={(e) => ed.setInsertMode(e.target.value as InsertMode)}
         sx={{ width: 120 }}
-        SelectProps={{
-          title:
-            "Where a new control point goes: after the last, before the first, or into the nearest segment",
+        slotProps={{
+          select: {
+            title:
+              "Where a new control point goes: after the last, before the first, or into the nearest segment",
+          },
         }}
       >
         <MenuItem value="append">append</MenuItem>
@@ -346,16 +349,14 @@ function SaveFilamentsDialog({
   const [error, setError] = useState<string | null>(null);
 
   // Defaults when the dialog opens: the set's own identity, or a new session for tool output.
-  useEffect(() => {
-    if (!open || !editing) return;
+  if (useChanged([open]) && open && editing) {
     setUserId(toolOutput ? config?.user_id || "user" : editing.userId);
     setSessionId(
       toolOutput ? generateSessionId(usedSessions) : editing.sessionId,
     );
     setSpacing(String(object?.radius ?? 100));
     setError(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }
   if (!editing) return null;
 
   const userCheck = validateCopickName(userId);

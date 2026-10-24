@@ -83,7 +83,13 @@ export function ProjectListPage() {
           justifyContent: "center",
         }}
       >
-        <Typography color="text.secondary">No projects available.</Typography>
+        <Typography
+          sx={{
+            color: "text.secondary",
+          }}
+        >
+          No projects available.
+        </Typography>
       </Box>
     );
   }
@@ -130,7 +136,13 @@ function ProjectCard({ project }: { project: ProjectSummaryResponse }) {
             )}
           </Box>
           {project.description && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+                mb: 1,
+              }}
+            >
               {project.description}
             </Typography>
           )}

@@ -5,13 +5,14 @@
  * There is no picking in 3D. Drags (pan) are not clicks.
  */
 
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, type MutableRefObject } from "react";
 import {
   pointCentre,
   usePicking,
   type PickingPoint,
 } from "@/contexts/PickingContext";
 import { useScene } from "@/contexts/SceneContext";
+import { useLatestRef } from "@/utils/useLatestRef";
 import {
   AXES,
   PLANES,
@@ -31,8 +32,7 @@ interface PickingEventHandlerProps {
 export function PickingEventHandler({ paneRefs }: PickingEventHandlerProps) {
   const { scene, visible } = useScene();
   const picking = usePicking();
-  const pickingRef = useRef(picking);
-  pickingRef.current = picking;
+  const pickingRef = useLatestRef(picking);
   const visibleKey = visible.map(Number).join("");
   const { isEditing } = picking;
   const tool = picking.state.activeTool;
