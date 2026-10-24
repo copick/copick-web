@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Box,
   IconButton,
@@ -146,9 +147,7 @@ function RunTreeNode({ runName, onInfo }: RunTreeNodeProps) {
   const shownHere = holdsShownTomogram
     ? `${state.selectedVoxelSize}/${state.selectedTomoType}`
     : null;
-  useEffect(() => {
-    if (shownHere) setExpanded(true);
-  }, [shownHere]);
+  if (useChanged([shownHere]) && shownHere) setExpanded(true);
 
   return (
     <>
@@ -250,9 +249,7 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
   const [expanded, setExpanded] = useState(shownHere !== null);
   const openTomogram = useOpenTomogram();
 
-  useEffect(() => {
-    if (shownHere) setExpanded(true);
-  }, [shownHere]);
+  if (useChanged([shownHere]) && shownHere) setExpanded(true);
 
   const handleTomogramClick = (tomoType: string) =>
     openTomogram(runName, voxelSpacing.voxel_size, tomoType);

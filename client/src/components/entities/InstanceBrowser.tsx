@@ -47,13 +47,14 @@ export function InstanceBrowser({ runName, identity }: InstanceBrowserProps) {
   );
   const panoptic = identity.segmentationType === "panoptic";
 
+  const identityName = identity.name;
   const objectName = useMemo(() => {
     const names = new Map<number, string>();
     for (const o of objects ?? [])
       if (o.label !== null) names.set(o.label, o.name);
     return (label: number | null) =>
-      label === null ? identity.name : (names.get(label) ?? `label ${label}`);
-  }, [objects, identity.name]);
+      label === null ? identityName : (names.get(label) ?? `label ${label}`);
+  }, [objects, identityName]);
 
   if (isLoading) {
     return (
