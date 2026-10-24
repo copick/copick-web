@@ -1,6 +1,4 @@
-FROM node:22-slim AS build
-# idetik requires newer npm version
-RUN npm install -g npm@11
+FROM node:24-slim AS build
 WORKDIR /app
 COPY client/package*.json ./
 # --ignore-scripts avoids ETXTBSY error with esbuild on Podman overlay fs
