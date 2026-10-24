@@ -8,7 +8,6 @@
  * the zoom has settled.
  */
 
-import { Layer, Points } from "@idetik/core";
 import { vec3 } from "gl-matrix";
 import type { XYZ } from "./coordinates";
 import {
@@ -23,8 +22,7 @@ import {
   type SurfaceColoring,
   type SurfacePoints,
 } from "@/utils/surfacePoints";
-
-type PointProps = ConstructorParameters<typeof Points>[0][number];
+import { PointsLayer, type PointProps } from "./PointsLayer";
 
 /** Point diameter, in voxels of the points' level. */
 const VOXEL_DIAMETER = 1.6;
@@ -39,7 +37,7 @@ export interface SurfacePointsLayerOptions {
   minPixels: number;
 }
 
-export class SurfacePointsLayer extends Layer {
+export class SurfacePointsLayer extends PointsLayer {
   public readonly type = "SurfacePointsLayer";
 
   private readonly options_: SurfacePointsLayerOptions;
@@ -52,7 +50,7 @@ export class SurfacePointsLayer extends Layer {
   private pendingSince_ = 0;
 
   constructor(options: SurfacePointsLayerOptions) {
-    super({ blendMode: "normal" });
+    super({ depthTest: true });
     this.options_ = options;
     const { points, coloring, angstromPerUnit } = options;
     const n = points.positions.length / 3;
@@ -80,17 +78,17 @@ export class SurfacePointsLayer extends Layer {
     this.setState("ready");
   }
 
-  update(viewport?: Viewport): void {
-    if (!viewport) return;
+  update(viewport?: Viewport): boolean {
+    if (!viewport) return false;
     const scale = pixelsPerWorldUnit(viewport, this.focus_);
     if (!this.built_) {
       this.zoom_.commit(scale);
       this.rebuild();
-      return;
+      return true;
     }
     if (!this.zoom_.changed(scale) || scale === null) {
       this.pendingScale_ = null;
-      return;
+      return false;
     }
     const now = performance.now();
     if (
@@ -99,13 +97,13 @@ export class SurfacePointsLayer extends Layer {
     ) {
       this.pendingScale_ = scale;
       this.pendingSince_ = now;
-      return;
+      return false;
     }
-    if (now - this.pendingSince_ >= SETTLE_MS) {
-      this.pendingScale_ = null;
-      this.zoom_.commit(scale);
-      this.rebuild();
-    }
+    if (now - this.pendingSince_ < SETTLE_MS) return false;
+    this.pendingScale_ = null;
+    this.zoom_.commit(scale);
+    this.rebuild();
+    return true;
   }
 
   private rebuild(): void {
@@ -121,8 +119,7 @@ export class SurfacePointsLayer extends Layer {
       size,
       marker: "square",
     }));
-    this.clearObjects();
-    if (props.length > 0) this.addObject(new Points(props));
+    this.setPoints(props);
   }
 }
 
