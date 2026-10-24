@@ -101,7 +101,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
 
       # The wheel ships the built client (server/src/copick_web/static), so `pip install copick-web` serves the UI.
       - name: Build client
