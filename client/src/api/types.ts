@@ -210,10 +210,7 @@ export interface SegmentationSummaryResponse {
 }
 
 export type SegmentationType =
-  | "binary"
-  | "multilabel"
-  | "instance"
-  | "panoptic";
+  "binary" | "multilabel" | "instance" | "panoptic";
 export const SEGMENTATION_TYPES: SegmentationType[] = [
   "binary",
   "multilabel",

@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: release please
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         id: release
         with:
           manifest-file: ".release-please.manifest.json"
@@ -63,7 +63,7 @@ jobs:
           npm run build:server
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10
         with:
           version: "0.7.13"
           python-version: "3.12"
