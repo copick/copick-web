@@ -35,6 +35,7 @@ import {
 import { contrastWithRange, type Contrast } from "@/idetik/contrast";
 import { isAbortError, withSceneSignal } from "@/idetik/lifecycle";
 import { sourcePolicy } from "@/idetik/policy";
+import { useLatestRef } from "@/utils/useLatestRef";
 import { scaleBar } from "@/idetik/scaleBar";
 import { lengthLabel } from "@/idetik/coordinates";
 import type { LoadingStage, Scene } from "@/contexts/SceneContext";
@@ -111,12 +112,10 @@ export function useTomogramScene({
   const [notes, setNotes] = useState<string[]>([]);
   const [contextLost, setContextLost] = useState(false);
   const [autoContrast, setAutoContrast] = useState<Contrast | null>(null);
-  const visibleRef = useRef(visible);
-  visibleRef.current = visible;
+  const visibleRef = useLatestRef(visible);
   const stageRef = useRef<LoadingStage>("xy");
   const volumeRef = useRef<{ objects: unknown[] } | null>(null);
-  const onCenterRef = useRef(onCenter);
-  onCenterRef.current = onCenter;
+  const onCenterRef = useLatestRef(onCenter);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -4,7 +4,8 @@
  * dialog). Each save writes the configuration file on the server.
  */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Alert,
   Box,
@@ -83,15 +84,14 @@ export function ObjectTypesDialog({ open, onClose }: ObjectTypesDialogProps) {
     setMessage(null);
   };
 
-  // First open: show the first object (or a new one in an empty configuration).
-  useEffect(() => {
+  // First open: show the first object (or a new one in an empty configuration). Closing clears the form.
+  if (useChanged([open, data])) {
     if (open && data && form === null) load(objects[0]?.name ?? null);
     if (!open) {
       setForm(null);
       setMessage(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, data]);
+  }
 
   const dirty = form !== null && JSON.stringify(form) !== baseline;
   const others = objects.filter((o) => o.name !== selected);

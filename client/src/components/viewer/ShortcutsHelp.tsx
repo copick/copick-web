@@ -4,7 +4,7 @@
  * rotate), usePaneInteractions (slices), PickingEventHandler and FilamentEditEventHandler (editing).
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import { KeyboardOutlined } from "@mui/icons-material";
 
@@ -103,7 +103,8 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 export function ShortcutsHelp() {
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  // The anchor is kept in state (a callback ref) because the panel reads it while rendering.
+  const [button, setButton] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
 
   // "?" toggles the panel, except while typing.
@@ -127,7 +128,7 @@ export function ShortcutsHelp() {
     <>
       <Tooltip title="Mouse and keyboard (?)">
         <IconButton
-          ref={buttonRef}
+          ref={setButton}
           size="small"
           aria-label="Mouse and keyboard"
           aria-expanded={open}
@@ -138,7 +139,7 @@ export function ShortcutsHelp() {
       </Tooltip>
       <Popover
         open={open}
-        anchorEl={buttonRef.current}
+        anchorEl={button}
         onClose={() => setOpen(false)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         transformOrigin={{ vertical: "top", horizontal: "right" }}

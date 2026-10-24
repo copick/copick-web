@@ -3,7 +3,8 @@
  * session. Nothing is written until the set is saved.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Alert,
   Box,
@@ -49,21 +50,19 @@ export function NewFilamentsDialog({
     ];
   }, [objects]);
 
-  useEffect(() => {
-    if (!open) return;
-    const first = choices[0]?.name ?? "";
-    setObjectName(first);
+  // Defaults when the dialog opens, and a fresh session whenever the chosen object (or its sets) change.
+  let chosen = objectName;
+  if (useChanged([open]) && open) {
+    chosen = choices[0]?.name ?? "";
+    setObjectName(chosen);
     setUserId(config?.user_id || "user");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
+  }
+  if (useChanged([open, chosen, sets]) && open) {
     const used = (sets ?? [])
-      .filter((s) => s.object_name === objectName)
+      .filter((s) => s.object_name === chosen)
       .map((s) => s.session_id);
     setSessionId(generateSessionId(used));
-  }, [open, objectName, sets]);
+  }
 
   const object = choices.find((o) => o.name === objectName);
   const userCheck = validateCopickName(userId);

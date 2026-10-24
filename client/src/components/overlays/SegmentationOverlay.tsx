@@ -33,6 +33,7 @@ import {
   type SegmentationSelection,
 } from "@/contexts/CopickContext";
 import { useScene } from "@/contexts/SceneContext";
+import { useLatestRef } from "@/utils/useLatestRef";
 import {
   layerStatusFromError,
   useLayerStatus,
@@ -163,14 +164,18 @@ function SegmentationLayers({
 }: SegmentationLayersProps) {
   const { updateSegmentation } = useCopick();
   const { setStatus } = useLayerStatus();
-  const [opened, setOpened] = useState<OpenedSource | null>(null);
   const type = selection.segmentationType;
   const url = appUrl(seg.zarr_url);
+  // A source opened for another segmentation (key, type or URL) is not shown while this one opens.
+  const sourceKey = `${segKey}|${type}|${url}`;
+  const [openedFor, setOpened] = useState<
+    (OpenedSource & { key: string }) | null
+  >(null);
+  const opened = openedFor?.key === sourceKey ? openedFor : null;
 
   useEffect(() => {
     let alive = true;
     const abort = new AbortController();
-    setOpened(null);
     (async () => {
       const base = await OmeZarrImageSource.fromHttp({ url });
       if (!alive) return;
@@ -197,6 +202,7 @@ function SegmentationLayers({
       }
       setStatus(segKey, null);
       setOpened({
+        key: sourceKey,
         base,
         channels,
         maxLod: Math.max(0, base.getDimensions().numLods - 1),
@@ -208,7 +214,7 @@ function SegmentationLayers({
       alive = false;
       abort.abort();
     };
-  }, [url, type, segKey, setStatus]);
+  }, [url, type, segKey, sourceKey, setStatus]);
 
   const objectColor: Rgba = objects.find((o) => o.name === seg.name)?.color ??
     seg.color ?? [255, 0, 0, 255];
@@ -222,10 +228,12 @@ function SegmentationLayers({
     [selection.hiddenIds, selection.soloId],
   );
   const objectMap = useMemo(() => objectLabelColorMap(objects), [objects]);
+  // Keyed by value: a fallback colour is a new array on every render.
+  const objectColorKey = objectColor.join(",");
   const binaryMap = useMemo(
-    () => binaryColorMap(objectColor),
-    [objectColor.join(",")],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+    () => binaryColorMap(objectColorKey.split(",").map(Number) as Rgba),
+    [objectColorKey],
+  );
 
   const objectName = (label: number) =>
     objects.find((o) => o.label === label)?.name ?? `label ${label}`;
@@ -392,9 +400,9 @@ function LabelLayerSet({
   outline = false,
 }: LabelLayerSetProps) {
   const { scene } = useScene();
-  const onPickRef = useLatest(onPick);
-  const colorMapRef = useLatest(colorMap);
-  const selectedRef = useLatest(selectedId);
+  const onPickRef = useLatestRef(onPick);
+  const colorMapRef = useLatestRef(colorMap);
+  const selectedRef = useLatestRef(selectedId);
 
   const layersRef = usePerViewportLayers<LabelLayer>(
     PLANES,
@@ -426,10 +434,4 @@ function LabelLayerSet({
   }, [selectedId, layersRef]);
 
   return null;
-}
-
-function useLatest<T>(value: T) {
-  const [ref] = useState(() => ({ current: value }));
-  ref.current = value;
-  return ref;
 }
