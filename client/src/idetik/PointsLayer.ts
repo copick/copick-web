@@ -12,8 +12,19 @@ export type { PointProps };
 export abstract class PointsLayer extends Layer {
   private readonly depthTest_: boolean;
 
-  constructor({ depthTest }: { depthTest: boolean }) {
-    super({ blendMode: "normal" });
+  /**
+   * @param depthTest - Whether points are depth-tested against occluding layers.
+   * @param occludes - Whether the points write depth, hiding what is behind them (idetik draws occluding layers
+   *   first, and only they contribute depth).
+   */
+  constructor({
+    depthTest,
+    occludes = false,
+  }: {
+    depthTest: boolean;
+    occludes?: boolean;
+  }) {
+    super({ blendMode: "normal", occludes });
     this.depthTest_ = depthTest;
   }
 

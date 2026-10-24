@@ -50,7 +50,8 @@ export class SurfacePointsLayer extends PointsLayer {
   private pendingSince_ = 0;
 
   constructor(options: SurfacePointsLayerOptions) {
-    super({ depthTest: true });
+    // Occluding, so the surface hides its own back side and the volume composites against its depth.
+    super({ depthTest: true, occludes: true });
     this.options_ = options;
     const { points, coloring, angstromPerUnit } = options;
     const n = points.positions.length / 3;
