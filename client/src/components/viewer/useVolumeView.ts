@@ -34,7 +34,7 @@ interface Options {
   visible3d: boolean;
   contrast: [number, number];
   settings: VolumeSettings;
-  volumeRef: MutableRefObject<{ objects: unknown[] } | null>;
+  volumeRef: MutableRefObject<VolumeLayer | null>;
 }
 
 export function useVolumeView({
@@ -86,6 +86,6 @@ export function useVolumeView({
     ]);
     volume.opacityMultiplier =
       settings.opacity / Math.max(...scene.geometry.axes.map((a) => a.scale));
-    volume.sourcePolicy = sourcePolicy(lod, lod);
+    // lod: the layer is rebuilt per level, and the new one needs these settings too.
   }, [active, scene, contrast, settings.threshold, settings.opacity, lod]);
 }

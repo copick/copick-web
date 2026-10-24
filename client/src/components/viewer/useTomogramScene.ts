@@ -22,6 +22,7 @@ import {
 import {
   ImageLayer,
   OmeZarrImageSource,
+  type VolumeLayer,
   type SliceCoordinates,
 } from "@idetik/core";
 import { ViewerRuntime } from "@/idetik/ViewerRuntime";
@@ -80,7 +81,7 @@ export interface TomogramSceneState {
   contextLost: boolean;
   autoContrast: Contrast | null;
   /** Set by useVolumeView; the stage machine waits for it. */
-  volumeRef: MutableRefObject<{ objects: unknown[] } | null>;
+  volumeRef: MutableRefObject<VolumeLayer | null>;
 }
 
 function hasSlice(image: ImageLayer): boolean {
@@ -114,7 +115,7 @@ export function useTomogramScene({
   const [autoContrast, setAutoContrast] = useState<Contrast | null>(null);
   const visibleRef = useLatestRef(visible);
   const stageRef = useRef<LoadingStage>("xy");
-  const volumeRef = useRef<{ objects: unknown[] } | null>(null);
+  const volumeRef = useRef<VolumeLayer | null>(null);
   const onCenterRef = useLatestRef(onCenter);
 
   useEffect(() => {
