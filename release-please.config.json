@@ -17,6 +17,13 @@
       "package-name": "copick-web",
       "release-type": "python",
       "component": "server",
+      "extra-files": [
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='copick-web')].version"
+        }
+      ],
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
