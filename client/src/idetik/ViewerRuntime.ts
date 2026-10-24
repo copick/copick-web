@@ -13,6 +13,7 @@ import {
   OrthographicCamera,
   PanZoomControls,
   PerspectiveCamera,
+  Viewport,
   type Layer,
   type Overlay,
 } from "@idetik/core";
@@ -58,19 +59,18 @@ export class ViewerRuntime {
 
     const ortho = PLANES.map((plane, i) => {
       const camera = ViewerRuntime.frameCamera(plane, geometry);
-      return {
+      return new Viewport({
         id: plane,
-        element: panes[i],
+        domElement: panes[i],
         camera,
         cameraControls: new PanZoomControls(camera),
-        layers: [] as Layer[],
-      };
+      });
     });
     const camera3d = new PerspectiveCamera({
       near: this.size_ / 10000,
       far: this.size_ * 20,
     });
-    // Native front-to-back volume compositing requires alpha=0; CSS provides the dark backdrop.
+    // idetik clears to transparent black, so the CSS backdrop shows behind the volume.
     // Each 2D view of a 3D chunk uploads the whole chunk (a 256³ float32 chunk is 64 MB), so
     // the budget is idetik's default rather than apex's 512 MB, which a single full-resolution
     // XY slice of a portal tomogram already exceeds (label layers then never get a slot).
@@ -79,20 +79,18 @@ export class ViewerRuntime {
       memoryLimitMB: MEMORY_LIMIT_MB,
       maxConcurrentRequests: 6,
       maxGpuUploadsPerUpdate: 2,
-      backgroundColor: [0, 0, 0, 0],
       viewports: [
         ...ortho,
-        {
+        new Viewport({
           id: "3D",
-          element: panes[3],
+          domElement: panes[3],
           camera: camera3d,
           cameraControls: this.orbitControls(
             camera3d,
             this.center_,
             this.size_ * 1.35,
           ),
-          layers: [],
-        },
+        }),
       ],
     });
   }
@@ -104,13 +102,13 @@ export class ViewerRuntime {
     const [u, v] = planeAxes[plane];
     const a = geometry.axes[u];
     const b = geometry.axes[v];
-    return new OrthographicCamera(
-      a.translation,
-      a.translation + a.size * a.scale,
-      b.translation + b.size * b.scale,
-      b.translation,
-      { orientation: plane },
-    );
+    return new OrthographicCamera({
+      left: a.translation,
+      right: a.translation + a.size * a.scale,
+      top: b.translation + b.size * b.scale,
+      bottom: b.translation,
+      orientation: plane,
+    });
   }
 
   private orbitControls(
@@ -191,7 +189,7 @@ export class ViewerRuntime {
 
   /** World units per CSS pixel along a view's horizontal axis, measured on that view's own pane. */
   worldPerPixel(id: Plane): number {
-    const element = this.viewport(id).element;
+    const element = this.viewport(id).domElement;
     const rect = element.getBoundingClientRect();
     if (rect.width === 0) return 0;
     const u = planeAxes[id][0];
@@ -217,12 +215,12 @@ export class ViewerRuntime {
     const [u, v] = planeAxes[id];
     const a = this.geometry.axes[u];
     const b = this.geometry.axes[v];
-    (viewport.camera as OrthographicCamera).setFrame(
-      a.translation,
-      a.translation + a.size * a.scale,
-      b.translation,
-      b.translation + b.size * b.scale,
-    );
+    (viewport.camera as OrthographicCamera).setFrame({
+      left: a.translation,
+      right: a.translation + a.size * a.scale,
+      top: b.translation + b.size * b.scale,
+      bottom: b.translation,
+    });
     viewport.updateSize();
   }
 

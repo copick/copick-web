@@ -5,9 +5,9 @@
  * Subclasses rebuild from `update()` and return whether they did, so idetik redraws only when something changed.
  */
 
-import { Layer, Points } from "@idetik/core";
+import { Layer, PointsRenderable, type PointProps } from "@idetik/core";
 
-export type PointProps = ConstructorParameters<typeof Points>[0][number];
+export type { PointProps };
 
 export abstract class PointsLayer extends Layer {
   private readonly depthTest_: boolean;
@@ -21,7 +21,7 @@ export abstract class PointsLayer extends Layer {
   protected setPoints(props: PointProps[]): void {
     this.clearObjects();
     if (props.length === 0) return;
-    const object = new Points(props);
+    const object = new PointsRenderable(props);
     object.depthTest = this.depthTest_;
     this.addObject(object);
   }
