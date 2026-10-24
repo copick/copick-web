@@ -26,6 +26,7 @@ import {
   type SliceCoordinates,
 } from "@idetik/core";
 import { ViewerRuntime } from "@/idetik/ViewerRuntime";
+import { loadedViewports } from "@/idetik/loading";
 import {
   PLANES,
   centerIndices,
@@ -82,19 +83,6 @@ export interface TomogramSceneState {
   autoContrast: Contrast | null;
   /** Set by useVolumeView; the stage machine waits for it. */
   volumeRef: MutableRefObject<VolumeLayer | null>;
-}
-
-function hasSlice(image: ImageLayer): boolean {
-  const view = image.chunkStoreView;
-  if (!view || !image.objects.length || !view.allVisibleFallbackLODLoaded())
-    return false;
-  const visible = [...view.chunkViewStates].filter(
-    ([chunk, state]) => state.visible && chunk.lod === view.currentLOD,
-  );
-  return (
-    visible.length > 0 &&
-    visible.every(([chunk]) => chunk.state === "loaded" && !!chunk.texture)
-  );
 }
 
 export function useTomogramScene({
@@ -225,25 +213,33 @@ export function useTomogramScene({
       const rt = runtime;
       let stageStarted = performance.now();
       let loadingCheckedAt = 0;
+      // Viewports fully drawn at their current LOD, from idetik's chunk statistics (polled, not read per frame).
+      let loaded = new Set<string>();
 
       rt.addOverlay({
         update() {
           if (!alive) return;
           const vis = visibleRef.current;
           const current = stageRef.current;
-          const stalled = performance.now() - stageStarted > STAGE_TIMEOUT_MS;
+          const now = performance.now();
+          const polled = now - loadingCheckedAt > LOADING_CHECK_MS;
+          if (polled) {
+            loadingCheckedAt = now;
+            loaded = loadedViewports(rt.idetik.stats.chunks.viewports);
+          }
+          const stalled = now - stageStarted > STAGE_TIMEOUT_MS;
           if (
             current === "xy" &&
-            (!vis[0] || hasSlice(images[0]) || chunkFailed || stalled)
+            (!vis[0] || loaded.has(PLANES[0]) || chunkFailed || stalled)
           ) {
             chunkFailed = false;
             stageStarted = performance.now();
             goTo("slices");
           } else if (
             current === "slices" &&
-            (images
-              .slice(1)
-              .every((image, i) => !vis[i + 1] || hasSlice(image)) ||
+            (PLANES.slice(1).every(
+              (plane, i) => !vis[i + 1] || loaded.has(plane),
+            ) ||
               chunkFailed ||
               stalled)
           ) {
@@ -254,19 +250,17 @@ export function useTomogramScene({
             goTo("volume");
           } else if (
             current === "volume" &&
-            (!vis[3] || (volumeRef.current?.objects.length ?? 0) > 0 || stalled)
+            (!vis[3] || (!!volumeRef.current && loaded.has("3D")) || stalled)
           ) {
             goTo("ready");
           }
 
           // Per-pane loading tags (slow stages move on without waiting for them).
-          const now = performance.now();
-          if (now - loadingCheckedAt > LOADING_CHECK_MS) {
-            loadingCheckedAt = now;
+          if (polled) {
             for (let i = 0; i < 3; i++) {
               const tag = decorRef.current.loading[i];
               if (!tag) continue;
-              const loading = vis[i] && !hasSlice(images[i]);
+              const loading = vis[i] && !loaded.has(PLANES[i]);
               const display = loading ? "inline" : "none";
               if (tag.style.display !== display) tag.style.display = display;
             }
