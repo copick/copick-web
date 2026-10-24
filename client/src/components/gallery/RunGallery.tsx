@@ -76,7 +76,12 @@ export function RunGallery() {
             />
           )}
         </Box>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           Central XY slices. Click a run to open it.
         </Typography>
         <Box sx={{ flexGrow: 1 }} />
@@ -90,7 +95,11 @@ export function RunGallery() {
         {isLoading && <CircularProgress size={24} />}
         {error && <Typography color="error">Failed to load runs</Typography>}
         {runs && shown.length === 0 && (
-          <Typography color="text.secondary">
+          <Typography
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             {runs.length
               ? `No runs match “${runSearch.trim()}”`
               : "No runs found"}
@@ -196,8 +205,11 @@ function RunCard({
         ) : thumbnail?.state === "error" ? (
           <Typography
             variant="caption"
-            color="text.secondary"
-            sx={{ p: 1, textAlign: "center" }}
+            sx={{
+              color: "text.secondary",
+              p: 1,
+              textAlign: "center",
+            }}
           >
             {thumbnail.message}
           </Typography>
@@ -216,9 +228,11 @@ function RunCard({
         </Typography>
         <Typography
           variant="caption"
-          color="text.secondary"
           noWrap
           component="div"
+          sx={{
+            color: "text.secondary",
+          }}
         >
           {thumbnail?.state === "ready"
             ? `${thumbnail.tomoType} · ${thumbnail.voxelSize} Å`

@@ -9,13 +9,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Chip } from "@mui/material";
 import { LayoutProvider, useLayout } from "@/contexts/LayoutContext";
-import { SceneContext, type SceneContextType } from "@/contexts/SceneContext";
+import {
+  SceneContext,
+  type Scene,
+  type SceneContextType,
+} from "@/contexts/SceneContext";
 import {
   SliceContext,
   useViewerBridge,
   type SliceContextType,
 } from "@/contexts/SliceContext";
 import { usePicking } from "@/contexts/PickingContext";
+import { useLatestRef } from "@/utils/useLatestRef";
+import { useChanged } from "@/utils/useChanged";
 import {
   PLANES,
   angstromToWorld,
@@ -54,6 +60,13 @@ const STAGE_LABEL = {
   ready: "",
 } as const;
 
+/** Point the shared slice coordinates (an idetik object every layer reads) at a world position. */
+function moveSliceCoords(sliceCoords: Scene["sliceCoords"], world: XYZ) {
+  sliceCoords.x = world[0];
+  sliceCoords.y = world[1];
+  sliceCoords.z = world[2];
+}
+
 export function TomogramViewer({ zarrUrl }: { zarrUrl: string }) {
   return (
     <LayoutProvider>
@@ -74,8 +87,7 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   });
   const [resetKey, setResetKey] = useState(0);
   const [indices, setIndices] = useState<XYZ>([0, 0, 0]);
-  const indicesRef = useRef<XYZ>(indices);
-  indicesRef.current = indices;
+  const indicesRef = useLatestRef<XYZ>(indices);
 
   const sourceUrl = appUrl(zarrUrl);
   const {
@@ -101,10 +113,10 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   // The crosshair drives every layer through the shared sliceCoords object.
   useEffect(() => {
     if (!scene) return;
-    const world = indicesToWorld(indices, scene.geometry.axes);
-    scene.sliceCoords.x = world[0];
-    scene.sliceCoords.y = world[1];
-    scene.sliceCoords.z = world[2];
+    moveSliceCoords(
+      scene.sliceCoords,
+      indicesToWorld(indices, scene.geometry.axes),
+    );
   }, [scene, indices]);
 
   const clampIndex = useCallback(
@@ -153,10 +165,11 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
 
   // Double-click focus is off while placing or deleting picks.
   const { state: pickingState, isEditing } = usePicking();
-  const allowFocusRef = useRef(true);
-  allowFocusRef.current =
+  const allowFocusRef = useLatestRef(
     !isEditing ||
-    (pickingState.activeTool !== "add" && pickingState.activeTool !== "delete");
+      (pickingState.activeTool !== "add" &&
+        pickingState.activeTool !== "delete"),
+  );
 
   usePaneInteractions({
     scene,
@@ -174,17 +187,20 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
   const [contrastRange, setContrastRange] = useState<[number, number] | null>(
     null,
   );
-  const contrastEdited = useRef(false);
-  useEffect(() => {
-    contrastEdited.current = false;
+  const [contrastEdited, setContrastEdited] = useState(false);
+  // A new tomogram starts from the defaults; its auto contrast applies unless the limits were edited.
+  const tomogramChanged = useChanged([zarrUrl]);
+  const autoContrastChanged = useChanged([autoContrast]);
+  if (tomogramChanged) {
+    setContrastEdited(false);
     setContrastRange(null);
     setContrastLimits(DEFAULT_CONTRAST);
-  }, [zarrUrl]);
-  useEffect(() => {
-    if (!autoContrast) return;
+  }
+  if (autoContrastChanged && autoContrast) {
     setContrastRange(autoContrast.range);
-    if (!contrastEdited.current) setContrastLimits(autoContrast.limits);
-  }, [autoContrast]);
+    if (tomogramChanged || !contrastEdited)
+      setContrastLimits(autoContrast.limits);
+  }
   useEffect(() => {
     if (!scene) return;
     for (const image of scene.images) {
@@ -322,11 +338,11 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
                   contrastRange={contrastRange}
                   onColorChange={setColor}
                   onContrastChange={(limits) => {
-                    contrastEdited.current = true;
+                    setContrastEdited(true);
                     setContrastLimits(limits);
                   }}
                   onResetContrast={() => {
-                    contrastEdited.current = false;
+                    setContrastEdited(false);
                     if (autoContrast) setContrastLimits(autoContrast.limits);
                   }}
                 />

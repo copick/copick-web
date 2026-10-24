@@ -11,9 +11,10 @@
  * never sees them; other drags still pan.
  */
 
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, type MutableRefObject } from "react";
 import { useFilamentEditing } from "@/contexts/FilamentEditingContext";
 import { useScene } from "@/contexts/SceneContext";
+import { useLatestRef } from "@/utils/useLatestRef";
 import {
   AXES,
   PLANES,
@@ -39,8 +40,7 @@ interface Props {
 export function FilamentEditEventHandler({ paneRefs }: Props) {
   const { scene, visible } = useScene();
   const editing = useFilamentEditing();
-  const editingRef = useRef(editing);
-  editingRef.current = editing;
+  const editingRef = useLatestRef(editing);
   const visibleKey = visible.map(Number).join("");
   const { isEditing, tool } = editing;
 
@@ -198,7 +198,7 @@ export function FilamentEditEventHandler({ paneRefs }: Props) {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [isEditing]);
+  }, [isEditing, editingRef]);
 
   // Cursor feedback per ortho pane.
   useEffect(() => {

@@ -46,7 +46,12 @@ export function PicksTable({ runName }: PicksTableProps) {
 
   if (!picks || picks.length === 0) {
     return (
-      <Typography color="text.secondary" sx={{ p: 2 }}>
+      <Typography
+        sx={{
+          color: "text.secondary",
+          p: 2,
+        }}
+      >
         No picks found
       </Typography>
     );

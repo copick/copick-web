@@ -3,7 +3,8 @@
  * Inspired by chimerax-copick's NewPickDialog.py
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Dialog,
   DialogTitle,
@@ -44,8 +45,8 @@ export function NewPickDialog({
   const [userId, setUserId] = useState("");
   const [sessionId, setSessionId] = useState("");
 
-  // Initialize defaults when dialog opens
-  useEffect(() => {
+  // Initialize defaults when the dialog opens (and when its data arrives while open)
+  if (useChanged([open, config, existingPicks, objects])) {
     if (open) {
       // Default user ID from config
       setUserId(config?.user_id || "user");
@@ -59,7 +60,7 @@ export function NewPickDialog({
         setObjectName(objects[0].name);
       }
     }
-  }, [open, config, existingPicks, objects]);
+  }
 
   // Validation
   const userValidation = validateCopickName(userId);
@@ -87,7 +88,12 @@ export function NewPickDialog({
       <DialogTitle>Create New Pick</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             Create a new set of picks with the specified parameters.
           </Typography>
 

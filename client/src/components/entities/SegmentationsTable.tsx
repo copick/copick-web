@@ -123,7 +123,12 @@ export function SegmentationsTable({
 
   if (!segmentations || segmentations.length === 0) {
     return (
-      <Typography color="text.secondary" sx={{ p: 2 }}>
+      <Typography
+        sx={{
+          color: "text.secondary",
+          p: 2,
+        }}
+      >
         No segmentations found
       </Typography>
     );
@@ -199,7 +204,12 @@ export function SegmentationsTable({
         </Box>
       )}
       {shown.length === 0 && (
-        <Typography color="text.secondary" sx={{ p: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           {search.trim() || shownOnly
             ? noMatchText("segmentations", search, shownOnly)
             : "No segmentations of the selected types"}

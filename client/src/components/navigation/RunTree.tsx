@@ -5,6 +5,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useChanged } from "@/utils/useChanged";
 import {
   Box,
   IconButton,
@@ -60,7 +61,12 @@ export function RunTree() {
 
   if (!runs || runs.length === 0) {
     return (
-      <Typography color="text.secondary" sx={{ p: 2 }}>
+      <Typography
+        sx={{
+          color: "text.secondary",
+          p: 2,
+        }}
+      >
         No runs found
       </Typography>
     );
@@ -89,7 +95,13 @@ export function RunTree() {
         />
       </Box>
       {shown.length === 0 && (
-        <Typography color="text.secondary" variant="body2" sx={{ p: 2 }}>
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           No runs match “{search.trim()}”
         </Typography>
       )}
@@ -135,9 +147,7 @@ function RunTreeNode({ runName, onInfo }: RunTreeNodeProps) {
   const shownHere = holdsShownTomogram
     ? `${state.selectedVoxelSize}/${state.selectedTomoType}`
     : null;
-  useEffect(() => {
-    if (shownHere) setExpanded(true);
-  }, [shownHere]);
+  if (useChanged([shownHere]) && shownHere) setExpanded(true);
 
   return (
     <>
@@ -147,9 +157,11 @@ function RunTreeNode({ runName, onInfo }: RunTreeNodeProps) {
         </ListItemIcon>
         <ListItemText
           primary={runName}
-          primaryTypographyProps={{
-            noWrap: true,
-            fontWeight: holdsShownTomogram ? 600 : undefined,
+          slotProps={{
+            primary: {
+              noWrap: true,
+              sx: { fontWeight: holdsShownTomogram ? 600 : undefined },
+            },
           }}
         />
         <IconButton
@@ -197,7 +209,9 @@ function VoxelSpacingList({ runName }: VoxelSpacingListProps) {
         <ListItemButton disabled>
           <ListItemText
             primary="No voxel spacings"
-            primaryTypographyProps={{ color: "text.secondary" }}
+            slotProps={{
+              primary: { color: "text.secondary" },
+            }}
           />
         </ListItemButton>
       </List>
@@ -235,9 +249,7 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
   const [expanded, setExpanded] = useState(shownHere !== null);
   const openTomogram = useOpenTomogram();
 
-  useEffect(() => {
-    if (shownHere) setExpanded(true);
-  }, [shownHere]);
+  if (useChanged([shownHere]) && shownHere) setExpanded(true);
 
   const handleTomogramClick = (tomoType: string) =>
     openTomogram(runName, voxelSpacing.voxel_size, tomoType);
@@ -247,7 +259,9 @@ function VoxelSpacingNode({ runName, voxelSpacing }: VoxelSpacingNodeProps) {
       <ListItemButton onClick={() => setExpanded(!expanded)}>
         <ListItemText
           primary={`${voxelSpacing.voxel_size.toFixed(2)} Å`}
-          primaryTypographyProps={{ variant: "body2" }}
+          slotProps={{
+            primary: { variant: "body2" },
+          }}
         />
         {expanded ? (
           <ExpandLess fontSize="small" />
@@ -312,7 +326,9 @@ function TomogramItem({
       </ListItemIcon>
       <ListItemText
         primary={tomoType}
-        primaryTypographyProps={{ variant: "body2", noWrap: true }}
+        slotProps={{
+          primary: { variant: "body2", noWrap: true },
+        }}
       />
     </ListItemButton>
   );

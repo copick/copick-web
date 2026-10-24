@@ -45,13 +45,13 @@ jobs:
       id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
       - name: Checkout ref branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -86,13 +86,13 @@ jobs:
   #   if: needs.release-please.outputs.client_release_created == 'true'
   #   steps:
   #     - name: Checkout ref branch
-  #       uses: actions/checkout@v6
+  #       uses: actions/checkout@v7
   #       with:
   #         ref: ${{ github.ref }}
   #         fetch-depth: 0
   #
   #     - name: Setup Node.js
-  #       uses: actions/setup-node@v4
+  #       uses: actions/setup-node@v7
   #       with:
   #         node-version: '20'
   #         registry-url: 'https://registry.npmjs.org'

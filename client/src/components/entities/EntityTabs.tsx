@@ -57,7 +57,12 @@ export function EntityTabs() {
   if (!state.selectedRunName) {
     return (
       <Box sx={{ p: 2 }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           Select a tomogram to view its run's annotations
         </Typography>
       </Box>

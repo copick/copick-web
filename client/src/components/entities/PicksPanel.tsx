@@ -214,11 +214,21 @@ export function PicksPanel({
 
       {/* Table */}
       {!picks || picks.length === 0 ? (
-        <Typography color="text.secondary" sx={{ p: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           No picks found
         </Typography>
       ) : shownPicks.length === 0 ? (
-        <Typography color="text.secondary" sx={{ p: 2 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            p: 2,
+          }}
+        >
           {noMatchText("picks", search, shownOnly)}
         </Typography>
       ) : (
