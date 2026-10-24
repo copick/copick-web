@@ -1,3 +1,5 @@
+# GitHub reads this file from the default branch only, so every entry appears twice: once for main
+# and once with target-branch v2.0 (v2.0's own copy takes effect when it becomes the default).
 version: 2
 updates:
   - package-ecosystem: "uv"

@@ -26,7 +26,7 @@ copick-web consists of two components:
 
 ## Prerequisites
 
-- Python 3.9+
+- Python 3.11+
 - Node.js 24+
 - A copick configuration file pointing to your data
 
