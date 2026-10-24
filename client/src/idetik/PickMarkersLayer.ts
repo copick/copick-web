@@ -14,7 +14,7 @@
  * on screen than their minimum pixel size, so they grow as the view zooms in.
  */
 
-import { Layer, Points, type SliceCoordinates } from "@idetik/core";
+import type { SliceCoordinates } from "@idetik/core";
 import { vec3 } from "gl-matrix";
 import {
   AXES,
@@ -30,8 +30,8 @@ import {
   ZoomTracker,
   type Viewport,
 } from "./zoom";
+import { PointsLayer, type PointProps } from "./PointsLayer";
 
-type PointProps = ConstructorParameters<typeof Points>[0][number];
 export type Rgba255 = [number, number, number, number];
 export type MarkerStyle = "dots" | "shells";
 
@@ -57,7 +57,7 @@ export interface PickMarkersOptions {
   fadeRadius: number;
 }
 
-export class PickMarkersLayer extends Layer {
+export class PickMarkersLayer extends PointsLayer {
   public readonly type = "PickMarkersLayer";
 
   private readonly options_: PickMarkersOptions;
@@ -67,7 +67,7 @@ export class PickMarkersLayer extends Layer {
   private readonly focus_: XYZ | null;
 
   constructor(options: PickMarkersOptions) {
-    super({ blendMode: "normal" });
+    super({ depthTest: false });
     this.options_ = options;
     this.focus_ =
       options.view === "3D"
@@ -77,19 +77,21 @@ export class PickMarkersLayer extends Layer {
     this.setState("ready");
   }
 
-  update(viewport?: Viewport): void {
+  update(viewport?: Viewport): boolean {
     const { view, sliceCoords } = this.options_;
     const scale = pixelsPerWorldUnit(viewport, this.focus_ ?? undefined);
     const zoomed = this.zoom_.changed(scale);
     if (zoomed) this.zoom_.commit(scale);
     if (view === "3D") {
-      if (!this.built_ || zoomed) this.rebuild(0);
-      return;
+      if (this.built_ && !zoomed) return false;
+      this.rebuild(0);
+      return true;
     }
     const w = planeAxes[view][2];
     const slice = sliceCoords[AXES[w]] ?? 0;
-    if (!this.built_ || zoomed || slice !== this.lastSlice_)
-      this.rebuild(slice);
+    if (this.built_ && !zoomed && slice === this.lastSlice_) return false;
+    this.rebuild(slice);
+    return true;
   }
 
   private rebuild(slice: number): void {
@@ -180,12 +182,7 @@ export class PickMarkersLayer extends Layer {
       add(onPlane, color, 1.0 / zScale, size);
     }
 
-    this.clearObjects();
-    if (props.length > 0) {
-      const object = new Points(props);
-      object.depthTest = false;
-      this.addObject(object);
-    }
+    this.setPoints(props);
   }
 }
 
