@@ -33,7 +33,7 @@ jobs:
         uses: pre-commit/action@v3.0.1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10
 
       # Dependabot and release-please keep server/uv.lock current; this catches a hand edit of pyproject.toml.
       - name: Check lockfile
