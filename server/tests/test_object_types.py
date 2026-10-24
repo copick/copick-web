@@ -8,7 +8,7 @@ import os
 import copick
 import pytest
 
-URL = "/api/object-types"
+URL = "/api/projects/demo/object-types"
 
 
 def _types(client):
@@ -35,7 +35,7 @@ def test_create_saves_the_config_and_refreshes_objects(client, service, demo_con
     assert created.status_code == 201, created.text
     assert created.json()["version"] != body["version"]
     # the running server and the file both see it, and a fresh copick root reads it back
-    assert any(o["name"] == "proteasome" for o in client.get("/api/objects").json())
+    assert any(o["name"] == "proteasome" for o in client.get("/api/projects/demo/objects").json())
     on_disk = json.loads(demo_config.read_text())
     assert any(o["name"] == "proteasome" and o["label"] == 9 for o in on_disk["pickable_objects"])
     assert copick.from_file(str(demo_config)).get_object("proteasome").color == (10, 20, 30, 255)
@@ -65,7 +65,7 @@ def test_filament_declaration_round_trip(client, demo_config):
     assert after["filament"] == {"polar": True, "helical_rise_a": 9.4, "helical_twist_deg": None}
     saved = next(o for o in json.loads(demo_config.read_text())["pickable_objects"] if o["name"] == "ribosome")
     assert saved["metadata"]["copick"]["filament"] == {"polar": True, "helical_rise_a": 9.4}
-    assert {o["name"]: o for o in client.get("/api/objects").json()}["ribosome"]["is_filament"]
+    assert {o["name"]: o for o in client.get("/api/projects/demo/objects").json()}["ribosome"]["is_filament"]
 
     after["filament"] = None
     response = client.put(f"{URL}/ribosome", json={"version": response.json()["version"], **after})
@@ -146,7 +146,7 @@ def test_edits_on_disk_are_picked_up_and_other_settings_kept(client, demo_config
     assert "by-hand" in demo_config.read_text()
     # both listings see the hand edit
     fresh, by_name = _types(client)
-    assert "by-hand" in by_name and any(o["name"] == "by-hand" for o in client.get("/api/objects").json())
+    assert "by-hand" in by_name and any(o["name"] == "by-hand" for o in client.get("/api/projects/demo/objects").json())
     # a change on the fresh version keeps the rest of the file as it is
     assert client.post(URL, json=_payload(fresh["version"])).status_code == 201
     saved = json.loads(demo_config.read_text())

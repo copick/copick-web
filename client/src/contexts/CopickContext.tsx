@@ -315,6 +315,7 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
 
 // Context type
 interface CopickContextType {
+  projectId: string;
   state: CopickState;
   dispatch: React.Dispatch<CopickAction>;
   // Convenience actions
@@ -349,12 +350,20 @@ interface CopickContextType {
 }
 
 const CopickContext = createContext<CopickContextType | null>(null);
+/** The project id alone, so reading it does not re-render on every selection change. */
+const ProjectIdContext = createContext<string | null>(null);
 
 // Provider component
-export function CopickProvider({ children }: { children: ReactNode }) {
+export function CopickProvider({
+  projectId,
+  children,
+}: {
+  projectId: string;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(copickReducer, initialState);
 
-  const actions = useMemo<Omit<CopickContextType, "state">>(
+  const actions = useMemo<Omit<CopickContextType, "projectId" | "state">>(
     () => ({
       dispatch,
       selectRun: (runName) => dispatch({ type: "SELECT_RUN", runName }),
@@ -392,10 +401,15 @@ export function CopickProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const value = useMemo(() => ({ state, ...actions }), [state, actions]);
+  const value = useMemo(
+    () => ({ projectId, state, ...actions }),
+    [projectId, state, actions],
+  );
 
   return (
-    <CopickContext.Provider value={value}>{children}</CopickContext.Provider>
+    <ProjectIdContext.Provider value={projectId}>
+      <CopickContext.Provider value={value}>{children}</CopickContext.Provider>
+    </ProjectIdContext.Provider>
   );
 }
 
@@ -407,6 +421,16 @@ export function useCopick(): CopickContextType {
     throw new Error("useCopick must be used within a CopickProvider");
   }
   return context;
+}
+
+// Hook to access the current project id without subscribing to selection state.
+// eslint-disable-next-line react-refresh/only-export-components
+export function useProjectId(): string {
+  const projectId = useContext(ProjectIdContext);
+  if (projectId === null) {
+    throw new Error("useProjectId must be used within a CopickProvider");
+  }
+  return projectId;
 }
 
 /**

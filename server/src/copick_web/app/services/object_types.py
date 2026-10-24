@@ -10,13 +10,11 @@ the file while the server runs (by hand, or by a desktop viewer) are picked up b
 import copy
 import hashlib
 import json
-import os
-import tempfile
 import threading
-from pathlib import Path
 from typing import Any, Callable, List, Optional
 
 from ..validation import validate_copick_name
+from .config_file import ConfigFile
 
 #: Object metadata namespace and key of the filament declaration (``FilamentSpec``).
 FILAMENT_NAMESPACE = "copick"
@@ -51,30 +49,12 @@ def objects_version(objects: List[Any]) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
-def config_writable(config_path: Optional[str]) -> bool:
-    """Whether the configuration file (and its directory, for the atomic replace) can be written."""
-    if not config_path:
-        return False
-    path = Path(config_path)
-    return path.is_file() and os.access(path, os.W_OK) and os.access(path.parent, os.W_OK)
-
-
-def write_objects(objects: List[Any], config_path: str) -> None:
-    """Replace the ``pickable_objects`` of a configuration file, keeping everything else in it; atomically, so a crash
-    never leaves a half-written file."""
-    path = Path(config_path)
-    data = json.loads(path.read_text())
+def write_objects(objects: List[Any], config_file: ConfigFile) -> None:
+    """Replace the ``pickable_objects`` of a configuration file, keeping everything else in it (as written: for
+    registry projects, the roots the server rewrote to reach the cluster are never saved)."""
+    data = json.loads(config_file.read_text())
     data["pickable_objects"] = [o.model_dump(mode="json") for o in objects]
-    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
-    try:
-        with os.fdopen(fd, "w") as f:
-            json.dump(data, f, indent=4)
-        if path.exists():
-            os.chmod(tmp, path.stat().st_mode & 0o777)
-        os.replace(tmp, path)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
+    config_file.write_text(json.dumps(data, indent=4))
 
 
 def filament_spec_of(obj: Any) -> Optional[dict]:
@@ -162,18 +142,14 @@ def validate_objects(objects: List[Any], changed: Any) -> None:
 class ObjectTypesEditor:
     """Applies object type changes to a copick root and its configuration file, one at a time."""
 
-    def __init__(self, root: Any, config_path: Optional[str]):
+    def __init__(self, root: Any, config_file: Optional[ConfigFile]):
         self.root = root
-        self.config_path = config_path
+        self.config_file = config_file
         self._lock = threading.RLock()
         self._file_stamp = self._stamp()
 
     def _stamp(self) -> Optional[tuple]:
-        try:
-            st = os.stat(self.config_path) if self.config_path else None
-        except OSError:
-            return None
-        return (st.st_mtime_ns, st.st_size) if st is not None else None
+        return self.config_file.stamp() if self.config_file is not None else None
 
     def _set_objects(self, objects: List[Any]) -> None:
         self.root.config.pickable_objects = objects
@@ -188,7 +164,7 @@ class ObjectTypesEditor:
             if stamp is None or stamp == self._file_stamp:
                 return
             try:
-                data = json.loads(Path(self.config_path).read_text())
+                data = json.loads(self.config_file.read_text())
                 object_class = self._object_class()
                 objects = [object_class(**o) for o in data.get("pickable_objects", [])]
             except Exception:  # a half-edited file: keep what we have, retry on the next request
@@ -207,7 +183,7 @@ class ObjectTypesEditor:
 
     @property
     def editable(self) -> bool:
-        return config_writable(self.config_path)
+        return self.config_file is not None and self.config_file.writable()
 
     def _object_class(self) -> Callable[..., Any]:
         objects = self.root.config.pickable_objects
@@ -225,7 +201,7 @@ class ObjectTypesEditor:
             if version != objects_version(current):
                 raise ObjectTypesConflict("The object types were changed by someone else. Reload and try again.")
             updated = change(current)
-            write_objects(updated, self.config_path)
+            write_objects(updated, self.config_file)
             self._file_stamp = self._stamp()
             self._set_objects(updated)
             return updated

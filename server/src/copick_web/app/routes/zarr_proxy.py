@@ -1,19 +1,25 @@
 """HTTP proxy for objects exposed by copick-owned Zarr stores."""
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from zarr.abc.store import OffsetByteRequest, RangeByteRequest, SuffixByteRequest
 from zarr.core.buffer import default_buffer_prototype
 
-from ..services.copick_service import CopickService, get_copick_service
+from ..config import settings
+from ..dependencies import get_copick_service, get_registry
+from ..services.copick_service import CopickService
+from ..services.project_registry import ProjectRegistry
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/zarr", tags=["zarr"])
+router = APIRouter(prefix="/zarr/{project_id}", tags=["zarr"])
+ServiceDependency = Annotated[CopickService, Depends(get_copick_service)]
+RegistryDependency = Annotated[ProjectRegistry, Depends(get_registry)]
 
 _RANGE_PATTERN = re.compile(r"^(\d*)-(\d*)$")
 _CACHE_CONTROL = "public, max-age=3600"
@@ -170,14 +176,48 @@ async def _serve_zarr_object(request: Request, store: Any, path: str) -> Respons
     return Response(content=data, status_code=206, media_type=content_type, headers=headers)
 
 
+async def _serve_with_timeout(
+    request: Request,
+    store: Any,
+    path: str,
+    project_id: str,
+    registry: ProjectRegistry,
+    *,
+    where: str,
+) -> Response:
+    """Serve a Zarr object, bounded by the project's read concurrency and a timeout.
+
+    On timeout the read is cancelled and the cached ``CopickService`` is evicted so the next request rebuilds with a
+    fresh SSH connection, rather than every later request queueing behind a stuck SFTP channel.
+    """
+    timeout = settings.zarr_read_timeout_seconds
+    async with registry.get_read_semaphore(project_id):
+        try:
+            return await asyncio.wait_for(_serve_zarr_object(request, store, path), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Zarr read timed out after %.1fs (%s); evicting service for project %s.",
+                timeout,
+                where,
+                project_id,
+            )
+            registry.evict_service(project_id)
+            raise HTTPException(
+                status_code=504,
+                detail=f"Zarr read timed out after {timeout:.1f}s; project cache evicted, please retry",
+            ) from None
+
+
 @router.api_route("/tomo/{run_name}/{voxel_size}/{tomo_type}/{path:path}", methods=["GET", "HEAD"])
 async def proxy_tomogram_zarr(
     request: Request,
+    project_id: str,
     run_name: str,
     voxel_size: float,
     tomo_type: str,
     path: str,
-    service: Annotated[CopickService, Depends(get_copick_service)],
+    service: ServiceDependency,
+    registry: RegistryDependency,
 ) -> Response:
     """Proxy Zarr objects for a tomogram."""
     store = service.get_tomogram_zarr_store(run_name, voxel_size, tomo_type)
@@ -186,7 +226,8 @@ async def proxy_tomogram_zarr(
             status_code=404,
             detail=f"Tomogram '{tomo_type}' not found for run '{run_name}' at voxel size {voxel_size}",
         )
-    return await _serve_zarr_object(request, store, path)
+    where = f"tomo project={project_id} run={run_name} type={tomo_type} path={path}"
+    return await _serve_with_timeout(request, store, path, project_id, registry, where=where)
 
 
 _SEG_TYPES = ("binary", "multilabel", "instance", "panoptic")
@@ -198,6 +239,7 @@ _SEG_TYPES = ("binary", "multilabel", "instance", "panoptic")
 )
 async def proxy_typed_segmentation_zarr(
     request: Request,
+    project_id: str,
     seg_type: str,
     run_name: str,
     seg_name: str,
@@ -205,36 +247,52 @@ async def proxy_typed_segmentation_zarr(
     session_id: str,
     voxel_size: float,
     path: str,
-    service: Annotated[CopickService, Depends(get_copick_service)],
+    service: ServiceDependency,
+    registry: RegistryDependency,
 ) -> Response:
     """Proxy Zarr objects for a segmentation of a given type (the type is part of a segmentation's identity)."""
     if seg_type not in _SEG_TYPES:
         raise HTTPException(status_code=404, detail=f"Unknown segmentation type '{seg_type}'")
-    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size, seg_type)
-    if store is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"{seg_type} segmentation '{seg_name}' not found for run '{run_name}'",
-        )
-    return await _serve_zarr_object(request, store, path)
+    return await _proxy_segmentation(
+        request, project_id, service, registry, run_name, seg_name, user_id, session_id, voxel_size, path, seg_type
+    )
 
 
 @router.api_route("/seg/{run_name}/{seg_name}/{user_id}/{session_id}/{voxel_size}/{path:path}", methods=["GET", "HEAD"])
 async def proxy_segmentation_zarr(
     request: Request,
+    project_id: str,
     run_name: str,
     seg_name: str,
     user_id: str,
     session_id: str,
     voxel_size: float,
     path: str,
-    service: Annotated[CopickService, Depends(get_copick_service)],
+    service: ServiceDependency,
+    registry: RegistryDependency,
 ) -> Response:
     """Proxy Zarr objects for a segmentation (legacy alias: binary and multilabel only)."""
-    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size)
+    return await _proxy_segmentation(
+        request, project_id, service, registry, run_name, seg_name, user_id, session_id, voxel_size, path, None
+    )
+
+
+async def _proxy_segmentation(
+    request: Request,
+    project_id: str,
+    service: CopickService,
+    registry: ProjectRegistry,
+    run_name: str,
+    seg_name: str,
+    user_id: str,
+    session_id: str,
+    voxel_size: float,
+    path: str,
+    seg_type: Optional[str],
+) -> Response:
+    store = service.get_segmentation_zarr_store(run_name, seg_name, user_id, session_id, voxel_size, seg_type)
     if store is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Segmentation '{seg_name}' not found for run '{run_name}'",
-        )
-    return await _serve_zarr_object(request, store, path)
+        label = f"{seg_type} segmentation" if seg_type else "Segmentation"
+        raise HTTPException(status_code=404, detail=f"{label} '{seg_name}' not found for run '{run_name}'")
+    where = f"seg project={project_id} run={run_name} name={seg_name} path={path}"
+    return await _serve_with_timeout(request, store, path, project_id, registry, where=where)

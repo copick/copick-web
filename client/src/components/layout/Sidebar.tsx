@@ -3,18 +3,31 @@
  */
 
 import { useState } from "react";
-import { Box, Typography, Divider, IconButton, Tooltip } from "@mui/material";
+import {
+  Box,
+  Typography,
+  Divider,
+  Button,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { Category as ObjectTypesIcon } from "@mui/icons-material";
-import { useConfig } from "@/api/hooks";
+import { Link } from "react-router-dom";
+import { useConfig, useProjects } from "@/api/hooks";
 import { appUrl } from "@/api/client";
+import { useProjectId } from "@/contexts/CopickContext";
 import { RunTree } from "@/components/navigation/RunTree";
 import { EntityTabs } from "@/components/entities/EntityTabs";
 import { ObjectTypesDialog } from "@/components/config/ObjectTypesDialog";
 import { ReloadProjectButton } from "./ReloadProjectButton";
 
 export function Sidebar() {
+  const projectId = useProjectId();
   const { data: config } = useConfig();
+  const { data: projects } = useProjects();
   const [objectTypesOpen, setObjectTypesOpen] = useState(false);
+  const showBackLink = (projects?.length ?? 0) > 1;
 
   return (
     <Box
@@ -27,6 +40,17 @@ export function Sidebar() {
     >
       {/* Header */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
+        {showBackLink && (
+          <Button
+            component={Link}
+            to="/"
+            size="small"
+            startIcon={<ArrowBackIcon />}
+            sx={{ mb: 1, ml: -0.5 }}
+          >
+            Projects
+          </Button>
+        )}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
           <Box
             component="img"
@@ -35,7 +59,7 @@ export function Sidebar() {
             sx={{ width: 32, height: 32, flexShrink: 0 }}
           />
           <Typography variant="h6" noWrap sx={{ flexGrow: 1, minWidth: 0 }}>
-            {config?.name ?? "Copick Web"}
+            {config?.name ?? projectId}
           </Typography>
           <ReloadProjectButton />
           <Tooltip title="Object types: names, colours, labels…">
