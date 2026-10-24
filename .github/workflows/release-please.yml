@@ -33,38 +33,51 @@ jobs:
       server_release_created: ${{ steps.release.outputs['server--release_created'] }}
       client_release_created: ${{ steps.release.outputs['client--release_created'] }}
 
-  # publish-pypi-package:
-  #   name: Build and publish Python package to PyPI
-  #   runs-on: ubuntu-latest
-  #   needs: release-please
-  #   if: needs.release-please.outputs.server_release_created == 'true'
-  #   environment:
-  #     name: pypi
-  #     url: https://pypi.org/p/copick-web
-  #   permissions:
-  #     id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
-  #   steps:
-  #     - name: Checkout ref branch
-  #       uses: actions/checkout@v6
-  #       with:
-  #         ref: ${{ github.ref }}
-  #         fetch-depth: 0
-  #
-  #     - name: Install uv
-  #       uses: astral-sh/setup-uv@v7
-  #       with:
-  #         version: "0.7.13"
-  #         python-version: "3.12"
-  #
-  #     - name: build
-  #       run: |
-  #         cd server
-  #         uv build
-  #
-  #     - name: Publish distribution to PyPI
-  #       uses: pypa/gh-action-pypi-publish@release/v1
-  #       with:
-  #         packages-dir: server/dist
+  publish-pypi-package:
+    name: Build and publish Python package to PyPI
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.server_release_created == 'true'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/copick-web
+    permissions:
+      id-token: write # IMPORTANT: this permission is mandatory for trusted publishing
+    steps:
+      - name: Checkout ref branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The wheel ships the built client (server/src/copick_web/static), so `pip install copick-web` serves the UI.
+      - name: Build client
+        run: |
+          cd client
+          npm ci
+          npm run build:server
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.7.13"
+          python-version: "3.12"
+
+      - name: build
+        run: |
+          cd server
+          uv build
+          unzip -l dist/*.whl | grep -q 'copick_web/static/index.html' || { echo "wheel is missing the client build"; exit 1; }
+
+      - name: Publish distribution to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: server/dist
 
   # publish-npm-package:
   #   name: Build and publish client to npm
