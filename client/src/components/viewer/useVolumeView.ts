@@ -3,9 +3,10 @@
  * slices have loaded (stage "volume") and only while the 3D pane is shown.
  * Defaults to the coarsest level.
  *
- * The layer is recreated when the level changes: idetik's VolumeLayer (0.35) caches its drawn chunks by chunk
- * index without the level, and sets a chunk's size and position only when it first draws it, so after switching
- * levels it kept drawing the new level's chunks at the old level's extent (the volume was shifted and scaled).
+ * The layer is recreated when the level changes: idetik's VolumeLayer (0.35, still in 0.49) caches its drawn
+ * chunks by chunk index without the level, and sets a chunk's size and position only when it first draws it, so
+ * after switching levels it kept drawing the new level's chunks at the old level's extent (the volume was shifted
+ * and scaled).
  */
 
 import { useEffect, useRef, type MutableRefObject } from "react";
