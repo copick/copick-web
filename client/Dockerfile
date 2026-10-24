@@ -1,8 +1,9 @@
 FROM node:24-slim AS build
 WORKDIR /app
 COPY client/package*.json ./
-# --ignore-scripts avoids ETXTBSY error with esbuild on Podman overlay fs
-RUN npm ci --ignore-scripts && node node_modules/esbuild/install.js
+# No dependency needs an install script (Vite 8 bundles with Rolldown, not esbuild, and native
+# binaries come as optional packages). --ignore-scripts once avoided an ETXTBSY error with esbuild's.
+RUN npm ci --ignore-scripts
 COPY client/ .
 # No URL prefix is built in: the client finds it at runtime (see client/index.html).
 RUN npm run build
