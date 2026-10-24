@@ -1,7 +1,3 @@
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const sds = require("@czi-sds/components/dist/tailwind.json");
-
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -9,7 +5,7 @@ export default {
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: sds,
+    extend: {},
   },
   plugins: [],
 };
