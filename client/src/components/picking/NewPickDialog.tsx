@@ -87,7 +87,12 @@ export function NewPickDialog({
       <DialogTitle>Create New Pick</DialogTitle>
       <DialogContent>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             Create a new set of picks with the specified parameters.
           </Typography>
 

@@ -24,7 +24,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
-  AddCircleOutline as NewFilamentIcon,
+  AddCircleOutlined as NewFilamentIcon,
   ChevronLeft,
   ChevronRight,
   Close as CloseIcon,
@@ -215,9 +215,11 @@ export function FilamentEditToolbar() {
         value={ed.insertMode}
         onChange={(e) => ed.setInsertMode(e.target.value as InsertMode)}
         sx={{ width: 120 }}
-        SelectProps={{
-          title:
-            "Where a new control point goes: after the last, before the first, or into the nearest segment",
+        slotProps={{
+          select: {
+            title:
+              "Where a new control point goes: after the last, before the first, or into the nearest segment",
+          },
         }}
       >
         <MenuItem value="append">append</MenuItem>

@@ -87,7 +87,12 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
 
       {layout.mode === "single" ? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             View:
           </Typography>
           <ToggleButtonGroup
@@ -109,7 +114,13 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
           sx={{ display: "flex", alignItems: "center" }}
           aria-label="Visible views"
         >
-          <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mr: 0.5,
+            }}
+          >
             Show:
           </Typography>
           {VIEW_IDS.map((view, i) => (
@@ -125,7 +136,9 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
                     layout.multiVisible.filter(Boolean).length === 1
                   }
                   onChange={() => layout.togglePane(i)}
-                  inputProps={{ "aria-label": `Show ${view} view` }}
+                  slotProps={{
+                    input: { "aria-label": `Show ${view} view` },
+                  }}
                 />
               }
               label={<Typography variant="body2">{view}</Typography>}
@@ -182,12 +195,12 @@ export function ViewerControls({ onResetViews }: ViewerControlsProps) {
             >
               <Typography
                 variant="body2"
-                color="text.secondary"
+                title={world !== null ? `${world.toFixed(1)} Å` : undefined}
                 sx={{
+                  color: "text.secondary",
                   whiteSpace: "nowrap",
                   fontVariantNumeric: "tabular-nums",
                 }}
-                title={world !== null ? `${world.toFixed(1)} Å` : undefined}
               >
                 {AXES[axis].toUpperCase()}: {g ? indices[axis] : "?"} /{" "}
                 {g ? max : "?"}

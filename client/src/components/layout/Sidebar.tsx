@@ -43,6 +43,7 @@ export function Sidebar() {
         {showBackLink && (
           <Button
             component={Link}
+            nativeButton={false}
             to="/"
             size="small"
             startIcon={<ArrowBackIcon />}
@@ -75,10 +76,12 @@ export function Sidebar() {
         {config?.description && (
           <Typography
             variant="caption"
-            color="text.secondary"
             noWrap
             title={config.description}
-            sx={{ display: "block" }}
+            sx={{
+              color: "text.secondary",
+              display: "block",
+            }}
           >
             {config.description}
           </Typography>

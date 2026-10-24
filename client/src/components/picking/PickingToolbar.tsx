@@ -12,7 +12,7 @@ import {
   Tooltip,
 } from "@mui/material";
 import PanToolIcon from "@mui/icons-material/PanTool";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutlined";
 import HighlightAltIcon from "@mui/icons-material/HighlightAlt";
 import DeleteIcon from "@mui/icons-material/Delete";
 import SaveIcon from "@mui/icons-material/Save";
@@ -139,7 +139,6 @@ export function PickingToolbar() {
             size="small"
             value={state.activeInstanceId}
             onChange={(e) => setActiveInstanceId(Number(e.target.value))}
-            inputProps={{ min: 1, step: 1, "aria-label": "Active filament" }}
             sx={{
               width: 140,
               "& input": {
@@ -151,6 +150,9 @@ export function PickingToolbar() {
                 )}`,
                 pl: 1,
               },
+            }}
+            slotProps={{
+              htmlInput: { min: 1, step: 1, "aria-label": "Active filament" },
             }}
           />
         </Tooltip>
