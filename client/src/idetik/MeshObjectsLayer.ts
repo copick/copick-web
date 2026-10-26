@@ -9,6 +9,7 @@
  */
 
 import { Color, Layer, MeshRenderable } from "@idetik/core";
+import { bakeLighting } from "@/utils/lighting";
 
 /** idetik's runtime context (not exported by the package). */
 type Context = Parameters<Layer["onAttached"]>[0];
@@ -44,13 +45,6 @@ export interface MeshPart {
   color: [number, number, number];
 }
 
-/**
- * Lighting. idetik's light is fixed in world space (along -y, +z), so faces turned away from it get only the
- * ambient term; more ambient than idetik's default (0.25) keeps them readable.
- */
-const AMBIENT = 0.45;
-const DIFFUSE = 0.55;
-
 export class MeshObjectsLayer extends Layer {
   public readonly type = "MeshObjectsLayer";
 
@@ -62,11 +56,16 @@ export class MeshObjectsLayer extends Layer {
     super({ blendMode: "none", occludes: true });
     const scale = 1 / angstromPerUnit;
     for (const { geometry, color } of parts) {
+      // Lit by `lighting.ts` (a key and a fill light), folded into the normals: idetik's one light leaves the far
+      // side of a surface dark.
       const object = new MeshRenderable({
-        geometry,
+        geometry: meshGeometry(
+          bakeLighting(geometry.vertexData),
+          geometry.indexData,
+        ),
         color: new Color(color[0], color[1], color[2]),
-        ambientStrength: AMBIENT,
-        diffuseStrength: DIFFUSE,
+        ambientStrength: 0,
+        diffuseStrength: 1,
       });
       if (scale !== 1) object.transform.setScale([scale, scale, scale]);
       this.addObject(object);
