@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.5](https://github.com/copick/copick-web/compare/client-v0.1.4...client-v0.1.5) (2026-10-26)
+
+
+### Bug Fixes
+
+* **deps:** catch up all remaining updates; Vite 8, ESLint 10, React Router 7 ([#84](https://github.com/copick/copick-web/issues/84)) ([5a79e36](https://github.com/copick/copick-web/commit/5a79e36405727ec731f4a5b13c63e7a9ec931ecb))
+* **deps:** consolidate Dependabot updates; React 19, MUI 9, Tailwind 4, Node 24 ([#67](https://github.com/copick/copick-web/issues/67)) ([6082d57](https://github.com/copick/copick-web/commit/6082d578360af247f87c1d85dfd977ac72ed837b))
+* **deps:** upgrade the viewer engine @idetik/core from 0.35 to 0.49 ([#86](https://github.com/copick/copick-web/issues/86)) ([96bd61d](https://github.com/copick/copick-web/commit/96bd61d1693c27c3e28117e28e794d365b98d526))
+
 ## [0.1.4](https://github.com/copick/copick-web/compare/client-v0.1.3...client-v0.1.4) (2026-10-14)
 
 
