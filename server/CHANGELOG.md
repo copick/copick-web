@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0-alpha.2](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha.1...server-v1.0.0-alpha.2) (2026-10-26)
+
+
+### Features
+
+* multi-tenant with embrella integration (Zarr v3) ([#41](https://github.com/copick/copick-web/issues/41)) ([ac16090](https://github.com/copick/copick-web/commit/ac16090007ac232d1e7f3e8b0eedafaf928af499))
+* publish copick-web alphas to PyPI with the web UI bundled ([#40](https://github.com/copick/copick-web/issues/40)) ([7e3a85f](https://github.com/copick/copick-web/commit/7e3a85fac4bd91bfa33686f9e25cdfb817ca34b3))
+
+
+### Bug Fixes
+
+* bump the version of prereleases in server/src/copick_web/__init__.py ([#88](https://github.com/copick/copick-web/issues/88)) ([2754831](https://github.com/copick/copick-web/commit/27548314a3e58f4b01b0e79c16709199d229815f))
+* **deps:** consolidate Dependabot updates; React 19, MUI 9, Tailwind 4 (Zarr v3) ([#68](https://github.com/copick/copick-web/issues/68)) ([3d3324c](https://github.com/copick/copick-web/commit/3d3324c27fc5d067e29dcc88f6f12594bfbb1f2d))
+
+
+### Continuous Integration
+
+* set up Dependabot, with a server uv.lock ([#44](https://github.com/copick/copick-web/issues/44)) ([d0362bf](https://github.com/copick/copick-web/commit/d0362bfb9d7c0f43b133128213393024624f2278))
+
 ## [1.0.0-alpha.1](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha...server-v1.0.0-alpha.1) (2026-10-15)
 
 
