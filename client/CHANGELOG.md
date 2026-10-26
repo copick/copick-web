@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-alpha.3](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.2...client-v1.0.0-alpha.3) (2026-10-26)
+
+
+### Features
+
+* draw segmentations as isosurface meshes in the 3D view (Zarr v3) ([#95](https://github.com/copick/copick-web/issues/95)) ([4310c00](https://github.com/copick/copick-web/commit/4310c0039b512f95b4ea4583f9105f6c9b172b5b))
+* show copick meshes in the 3D view ([#93](https://github.com/copick/copick-web/issues/93)) ([a93a554](https://github.com/copick/copick-web/commit/a93a55481fe4f597cd0b41cbbe9d64fb18c87584))
+
+
+### Bug Fixes
+
+* **deps:** upgrade @idetik/core from 0.49 to 0.51 ([#91](https://github.com/copick/copick-web/issues/91)) ([7ab3568](https://github.com/copick/copick-web/commit/7ab35683190df846bdd81767cbfb7fbf74a0672a))
+
 ## [1.0.0-alpha.2](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.1...client-v1.0.0-alpha.2) (2026-10-26)
 
 

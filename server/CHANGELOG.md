@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.3](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha.2...server-v1.0.0-alpha.3) (2026-10-26)
+
+
+### Features
+
+* show copick meshes in the 3D view ([#93](https://github.com/copick/copick-web/issues/93)) ([a93a554](https://github.com/copick/copick-web/commit/a93a55481fe4f597cd0b41cbbe9d64fb18c87584))
+
 ## [1.0.0-alpha.2](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha.1...server-v1.0.0-alpha.2) (2026-10-26)
 
 
