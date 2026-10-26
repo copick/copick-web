@@ -144,6 +144,21 @@ jobs:
           print(f'release {want}, built {got}');
           sys.exit(0 if got == want else f'Built {got}, but the release is {want}: server/pyproject.toml was not bumped.')"
 
+      # release-please's own Python updater misses a version with a dotted prerelease suffix (1.0.0-alpha.1), so
+      # server/src/copick_web/__init__.py carries an x-release-please-version marker; refuse to upload if it was still
+      # missed (the wheel's version comes from pyproject.toml, so the check above cannot see it).
+      - name: Check __version__ is the release's
+        working-directory: server
+        env:
+          RELEASE_VERSION: ${{ needs.release-please.outputs.server_version }}
+        run: >
+          uv run --no-project --with packaging python -c
+          "import os, re, sys; from packaging.version import Version;
+          want = Version(os.environ['RELEASE_VERSION']);
+          got = Version(re.search(r'__version__ = \"([^\"]+)\"', open('src/copick_web/__init__.py').read()).group(1));
+          print(f'release {want}, __version__ {got}');
+          sys.exit(0 if got == want else f'__version__ is {got}, but the release is {want}: src/copick_web/__init__.py was not bumped.')"
+
       - name: Preserve validated artifacts
         uses: actions/upload-artifact@v7
         with:

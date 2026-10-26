@@ -29,7 +29,8 @@
           "type": "toml",
           "path": "uv.lock",
           "jsonpath": "$.package[?(@.name.value=='copick-web')].version"
-        }
+        },
+        { "type": "generic", "path": "src/copick_web/__init__.py" }
       ],
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
