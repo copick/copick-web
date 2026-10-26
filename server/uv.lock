@@ -685,7 +685,7 @@ wheels = [
 
 [[package]]
 name = "copick-web"
-version = "1.0.0a1"
+version = "1.0.0-alpha.2"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

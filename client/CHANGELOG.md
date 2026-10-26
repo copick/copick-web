@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0-alpha.2](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.1...client-v1.0.0-alpha.2) (2026-10-26)
+
+
+### Features
+
+* multi-tenant with embrella integration (Zarr v3) ([#41](https://github.com/copick/copick-web/issues/41)) ([ac16090](https://github.com/copick/copick-web/commit/ac16090007ac232d1e7f3e8b0eedafaf928af499))
+
+
+### Bug Fixes
+
+* **deps:** catch up all remaining updates; Vite 8, ESLint 10, React Router 7 (Zarr v3) ([#85](https://github.com/copick/copick-web/issues/85)) ([4612cf9](https://github.com/copick/copick-web/commit/4612cf90e9ae8a1467ef80229558d54c9404ec74))
+* **deps:** consolidate Dependabot updates; React 19, MUI 9, Tailwind 4 (Zarr v3) ([#68](https://github.com/copick/copick-web/issues/68)) ([3d3324c](https://github.com/copick/copick-web/commit/3d3324c27fc5d067e29dcc88f6f12594bfbb1f2d))
+* **deps:** upgrade the viewer engine @idetik/core from 0.35 to 0.49 (Zarr v3) ([#87](https://github.com/copick/copick-web/issues/87)) ([97c2dbf](https://github.com/copick/copick-web/commit/97c2dbf05b1cd6a246db8cf81e561d7892bc852c))
+
+
+### Build System
+
+* move the v2.0 line to Node 24 ([#42](https://github.com/copick/copick-web/issues/42)) ([0648cff](https://github.com/copick/copick-web/commit/0648cff6bca05aa79b85227a08df905db7762762))
+
 ## [1.0.0-alpha.1](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha...client-v1.0.0-alpha.1) (2026-10-15)
 
 
