@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.6](https://github.com/copick/copick-web/compare/client-v0.1.5...client-v0.1.6) (2026-10-26)
+
+
+### Features
+
+* draw segmentations as isosurface meshes in the 3D view ([#94](https://github.com/copick/copick-web/issues/94)) ([699ed60](https://github.com/copick/copick-web/commit/699ed60b6cd4483a5cb858ced92fe29a5c2517d3))
+* show copick meshes in the 3D view ([#92](https://github.com/copick/copick-web/issues/92)) ([e349bcd](https://github.com/copick/copick-web/commit/e349bcde894bce9e65459bdb41747f96116b2d0a))
+
+
+### Bug Fixes
+
+* **deps:** upgrade @idetik/core from 0.49 to 0.51 ([#90](https://github.com/copick/copick-web/issues/90)) ([5cec75d](https://github.com/copick/copick-web/commit/5cec75dd6656a27ba466f30cd538ae5f23a2fe40))
+
 ## [0.1.5](https://github.com/copick/copick-web/compare/client-v0.1.4...client-v0.1.5) (2026-10-26)
 
 
