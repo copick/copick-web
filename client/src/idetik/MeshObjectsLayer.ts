@@ -1,5 +1,6 @@
 /**
- * Triangle meshes in the 3D view (copick meshes): one idetik `MeshRenderable` per part, each in one colour.
+ * Triangle meshes in the 3D view (copick meshes, segmentation isosurfaces): one idetik `MeshRenderable` per part,
+ * each in one colour.
  *
  * idetik's `MeshLayer` loads its own source and fixes colour and size once built; here geometry is loaded with
  * React Query (so a failed load reaches the layer status) and passed in, and Å are scaled to world units. Like
@@ -16,6 +17,26 @@ type Context = Parameters<Layer["onAttached"]>[0];
 export type MeshGeometry = ConstructorParameters<
   typeof MeshRenderable
 >[0]["geometry"];
+
+/**
+ * Geometry from our own arrays (segmentation isosurfaces): interleaved position and normal, 6 floats per vertex,
+ * and three indices per triangle. `MeshRenderable` reads only these fields, the layout idetik's GLB loader
+ * produces; its `Geometry` class is not exported, hence the cast.
+ */
+export function meshGeometry(
+  vertices: Float32Array,
+  indices: Uint32Array,
+): MeshGeometry {
+  return {
+    vertexData: vertices,
+    indexData: indices,
+    primitive: "triangles",
+    attributes: [
+      { type: "position", itemSize: 3, offset: 0 },
+      { type: "normal", itemSize: 3, offset: 12 },
+    ],
+  } as unknown as MeshGeometry;
+}
 
 export interface MeshPart {
   geometry: MeshGeometry;

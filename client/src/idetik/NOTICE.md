@@ -28,3 +28,9 @@ SOFTWARE.
 @idetik/core is MIT licensed, Copyright 2026 Chan Zuckerberg Biohub, Inc.
 `ChannelViewSource.ts` relies on idetik internals (the chunk loader contract
 and LabelLayer's colour cycle); the dependency is pinned to an exact version (0.51.0).
+The isosurface reader (`../isosurface/readLabelVolume.ts`) uses the same chunk loader contract, and
+`MeshObjectsLayer.ts` builds `MeshRenderable`s from our own arrays in the layout idetik's GLB loader
+produces (its `Geometry` class is not exported); recheck both on every upgrade.
+
+The isosurfaces are made with vtk.js (`@kitware/vtk.js`, BSD-3-Clause, Copyright Kitware, Inc.), loaded
+only in the meshing worker.

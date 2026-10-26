@@ -20,6 +20,7 @@ copick-web consists of two components:
 - Filaments (ordered centrelines) drawn as dense points, coloured per filament ID
 - Meshes (copick's GLB triangle meshes) drawn in the 3D view in their object's colour
 - Segmentation overlays: binary, multilabel, instance (shared instance palette, click to identify, instance browser) and panoptic (objects / instances / both)
+- Segmentations in the 3D view as smoothed isosurfaces, computed in the browser (vtk.js marching cubes in a worker) from the same store as the slices, or as their boundary voxels
 - Newer copick features (filaments, instance and panoptic segmentations) are detected at runtime; older copick versions keep working
 - Multi-tenant: host many copick projects from one server, sourced from local
   config files and/or an external project registry API. Lazy `CopickService`

@@ -8,6 +8,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MeshSource } from "@idetik/core";
+import type { ChunkLoaderLike } from "@/idetik/ChannelViewSource";
+import { segmentationMeshes } from "@/isosurface/computeMeshes";
 import { api } from "./client";
 import { clearThumbnails } from "@/components/gallery/thumbnails";
 import { useProjectId } from "@/contexts/CopickContext";
@@ -80,9 +82,13 @@ export function useEditObjectType() {
       queryClient.invalidateQueries({
         predicate: (q) =>
           q.queryKey[1] === projectId &&
-          !["object-types", "surface", "instances", "mesh"].includes(
-            String(q.queryKey[0]),
-          ),
+          ![
+            "object-types",
+            "surface",
+            "isosurface",
+            "instances",
+            "mesh",
+          ].includes(String(q.queryKey[0])),
       });
     },
   });
@@ -310,6 +316,41 @@ export function useMeshGeometry(
         ),
       }).load(),
     enabled: enabled && !!runName && !!mesh,
+    staleTime: Infinity,
+    gcTime: 60_000,
+  });
+}
+
+/**
+ * A segmentation's isosurfaces (one mesh per value), computed in the browser from the store the 2D layers read.
+ * `loaders`: the source's chunk loader, or one per channel of a panoptic segmentation.
+ */
+export function useSegmentationMeshes(
+  runName: string | null,
+  seg: {
+    segmentationType: SegmentationType;
+    name: string;
+    userId: string;
+    sessionId: string;
+    voxelSize: number;
+  } | null,
+  loaders: ChunkLoaderLike[] | null,
+  enabled: boolean,
+) {
+  const projectId = useProjectId();
+  return useQuery({
+    queryKey: [
+      "isosurface",
+      projectId,
+      runName,
+      seg?.segmentationType,
+      seg?.name,
+      seg?.userId,
+      seg?.sessionId,
+      seg?.voxelSize,
+    ],
+    queryFn: ({ signal }) => segmentationMeshes(loaders!, signal),
+    enabled: enabled && !!runName && !!seg && !!loaders,
     staleTime: Infinity,
     gcTime: 60_000,
   });
