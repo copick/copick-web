@@ -1,7 +1,7 @@
 /**
- * Tabbed view for picks, segmentations and (on a copick with filaments)
- * filaments. Each tab counts what of it is shown in the viewer, and each table
- * can be limited to those rows.
+ * Tabbed view for picks, segmentations, (on a copick with filaments)
+ * filaments and meshes. Each tab counts what of it is shown in the viewer, and
+ * each table can be limited to those rows.
  */
 
 import { useState, type ReactNode } from "react";
@@ -11,37 +11,42 @@ import { useFeatures } from "@/api/hooks";
 import { PicksPanel } from "./PicksPanel";
 import { SegmentationsTable } from "./SegmentationsTable";
 import { FilamentsTable } from "./FilamentsTable";
+import { MeshesTable } from "./MeshesTable";
+
+type TabName = "picks" | "segmentations" | "filaments" | "meshes";
 
 interface TabPanelProps {
   children?: React.ReactNode;
-  index: number;
-  value: number;
+  name: TabName;
+  value: TabName;
 }
 
-function TabPanel({ children, value, index }: TabPanelProps) {
+function TabPanel({ children, value, name }: TabPanelProps) {
   return (
     <Box
       role="tabpanel"
-      hidden={value !== index}
+      hidden={value !== name}
       sx={{ overflow: "auto", flexGrow: 1 }}
     >
-      {value === index && children}
+      {value === name && children}
     </Box>
   );
 }
 
 export function EntityTabs() {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [tab, setTab] = useState<TabName>("picks");
   // One search per table, kept while switching tabs (the panels unmount).
   const [search, setSearch] = useState({
     picks: "",
     segmentations: "",
     filaments: "",
+    meshes: "",
   });
   const [shownOnly, setShownOnly] = useState({
     picks: false,
     segmentations: false,
     filaments: false,
+    meshes: false,
   });
   const searchProps = (table: keyof typeof search) => ({
     search: search[table],
@@ -69,61 +74,78 @@ export function EntityTabs() {
     );
   }
 
-  const index = features.filaments ? tabIndex : Math.min(tabIndex, 1);
+  const current = tab === "filaments" && !features.filaments ? "picks" : tab;
   const shownCount = {
     picks: state.selectedPicks.filter((p) => p.visible).length,
     segmentations: state.selectedSegmentations.filter((s) => s.visible).length,
     filaments: state.selectedFilaments.filter((f) => f.visible).length,
+    meshes: state.selectedMeshes.filter((m) => m.visible).length,
   };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <Tabs
-        value={index}
-        onChange={(_, v) => setTabIndex(v)}
-        variant="fullWidth"
+        value={current}
+        onChange={(_, v: TabName) => setTab(v)}
         sx={{
           borderBottom: 1,
           borderColor: "divider",
           minHeight: 40,
+          // Four tabs share the sidebar by the width of their labels (equal widths would cut "Segmentations").
           "& .MuiTab-root": {
+            flex: "1 1 auto",
             minWidth: 0,
             minHeight: 40,
-            px: 0.5,
+            px: 0.25,
             textTransform: "none",
             fontSize: "0.8125rem",
           },
         }}
       >
-        <Tab label={<TabLabel name="Picks" shown={shownCount.picks} />} />
         <Tab
+          value="picks"
+          label={<TabLabel name="Picks" shown={shownCount.picks} />}
+        />
+        <Tab
+          value="segmentations"
           label={
             <TabLabel name="Segmentations" shown={shownCount.segmentations} />
           }
         />
         {features.filaments && (
           <Tab
+            value="filaments"
             label={<TabLabel name="Filaments" shown={shownCount.filaments} />}
           />
         )}
+        <Tab
+          value="meshes"
+          label={<TabLabel name="Meshes" shown={shownCount.meshes} />}
+        />
       </Tabs>
-      <TabPanel value={index} index={0}>
+      <TabPanel value={current} name="picks">
         <PicksPanel runName={state.selectedRunName} {...searchProps("picks")} />
       </TabPanel>
-      <TabPanel value={index} index={1}>
+      <TabPanel value={current} name="segmentations">
         <SegmentationsTable
           runName={state.selectedRunName}
           {...searchProps("segmentations")}
         />
       </TabPanel>
       {features.filaments && (
-        <TabPanel value={index} index={2}>
+        <TabPanel value={current} name="filaments">
           <FilamentsTable
             runName={state.selectedRunName}
             {...searchProps("filaments")}
           />
         </TabPanel>
       )}
+      <TabPanel value={current} name="meshes">
+        <MeshesTable
+          runName={state.selectedRunName}
+          {...searchProps("meshes")}
+        />
+      </TabPanel>
     </Box>
   );
 }

@@ -4,6 +4,7 @@ The project has one run (``TS_001``) at 10 Å with:
 
 - a 32³ tomogram (``wbp``);
 - ``ribosome`` picks by ``alice``/``1`` whose points carry instance IDs and transforms with shifts;
+- a ``membrane`` mesh by ``alice``/``1``: a box spanning :data:`MESH_BOUNDS` (x, y, z Å);
 - a ``microtubule`` filament object (``metadata["copick"]["filament"]``);
 - ``microtubule`` filaments by ``alice``/``1`` (only on a copick with filaments);
 - a binary and an instance ``ribosome`` segmentation by ``alice``/``1`` (the same key, two types);
@@ -24,6 +25,8 @@ import numpy as np
 RUN = "TS_001"
 VOXEL_SIZE = 10.0
 SHAPE = (32, 32, 32)
+#: Corners of the ``membrane`` mesh box, (x, y, z) Å; different on every axis, so a swapped axis shows.
+MESH_BOUNDS = ((40.0, 80.0, 120.0), (200.0, 240.0, 160.0))
 
 OBJECTS = [
     {"name": "ribosome", "is_particle": True, "label": 1, "color": [255, 0, 0, 255], "radius": 60.0},
@@ -106,6 +109,12 @@ def build(root: Path) -> Path:
         )
     picks.points = points
     picks.store()
+
+    import trimesh
+
+    mesh = run.new_mesh("membrane", "1", user_id="alice")
+    mesh.mesh = trimesh.Scene(trimesh.creation.box(bounds=MESH_BOUNDS))
+    mesh.store()
 
     if hasattr(run, "new_filaments"):
         filaments = run.new_filaments(object_name="microtubule", session_id="1", user_id="alice")

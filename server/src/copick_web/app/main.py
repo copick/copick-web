@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routes import config, filaments, projects, runs, zarr_proxy
+from .routes import config, filaments, meshes, projects, runs, zarr_proxy
 from .services.project_registry import ProjectRegistry, set_project_registry
 from .services.registry_client import RegistryClient
 
@@ -129,6 +129,7 @@ app.include_router(projects.router)
 app.include_router(config.router)
 app.include_router(runs.router)
 app.include_router(filaments.router)
+app.include_router(meshes.router)
 app.include_router(zarr_proxy.router)
 
 

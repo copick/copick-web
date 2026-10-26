@@ -2,7 +2,7 @@
  * The tomogram viewer: linked XY / XZ / YZ orthoslices with crosshairs and a
  * 3D volume view on one idetik runtime. "Single" layout shows one ortho pane
  * (the former single-plane viewer); "Multi" shows the panes chosen under
- * "Show". Overlays (segmentations, picks, filaments) add one layer per
+ * "Show". Overlays (segmentations, picks, filaments, meshes) add one layer per
  * visible view and read the shared crosshair.
  */
 
@@ -47,6 +47,7 @@ import { usePaneInteractions } from "./usePaneInteractions";
 import { SegmentationOverlay } from "@/components/overlays/SegmentationOverlay";
 import { InteractivePicksOverlay } from "@/components/overlays/InteractivePicksOverlay";
 import { FilamentsOverlay } from "@/components/overlays/FilamentsOverlay";
+import { MeshOverlay } from "@/components/overlays/MeshOverlay";
 import { PickingToolbar } from "@/components/picking/PickingToolbar";
 import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 import { FilamentEditToolbar } from "@/components/filaments/FilamentEditToolbar";
@@ -253,6 +254,7 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
             <SegmentationOverlay />
             <InteractivePicksOverlay />
             <FilamentsOverlay />
+            <MeshOverlay />
             <PickingEventHandler paneRefs={paneRefs} />
             <FilamentEditEventHandler paneRefs={paneRefs} />
 
