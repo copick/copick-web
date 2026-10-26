@@ -32,5 +32,6 @@ The isosurface reader (`../isosurface/readLabelVolume.ts`) uses the same chunk l
 `MeshObjectsLayer.ts` builds `MeshRenderable`s from our own arrays in the layout idetik's GLB loader
 produces (its `Geometry` class is not exported); recheck both on every upgrade.
 
-The isosurfaces are made with vtk.js (`@kitware/vtk.js`, BSD-3-Clause, Copyright Kitware, Inc.), loaded
-only in the meshing worker.
+The isosurfaces are made with vtk.js (`@kitware/vtk.js`, BSD-3-Clause, Copyright (c) 2016, Kitware Inc.),
+loaded only in the meshing worker. Its licence text, and those of the other bundled packages, ship with the
+build in `THIRD_PARTY_LICENSES.md` (Vite's `build.license`, plus `client/workerLicenses.ts` for the workers).
