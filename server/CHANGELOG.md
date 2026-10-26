@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.5](https://github.com/copick/copick-web/compare/server-v0.1.4...server-v0.1.5) (2026-10-26)
+
+
+### Features
+
+* publish copick-web to PyPI with the web UI bundled ([#39](https://github.com/copick/copick-web/issues/39)) ([6323e7c](https://github.com/copick/copick-web/commit/6323e7c7873385f76d3302e51aa78e7f265111e6))
+
+
+### Bug Fixes
+
+* require Python 3.11 for the server, so Dependabot can update uv.lock ([#69](https://github.com/copick/copick-web/issues/69)) ([a150289](https://github.com/copick/copick-web/commit/a150289cc03b4c5259cce438cba828919f9dbda0))
+
+
+### Continuous Integration
+
+* set up Dependabot, with a server uv.lock ([#43](https://github.com/copick/copick-web/issues/43)) ([0f0dc7d](https://github.com/copick/copick-web/commit/0f0dc7d68b6c9500c0f3c93217c600957ce5839f))
+
 ## [0.1.4](https://github.com/copick/copick-web/compare/server-v0.1.3...server-v0.1.4) (2026-10-14)
 
 
