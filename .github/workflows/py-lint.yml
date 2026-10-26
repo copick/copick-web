@@ -6,11 +6,13 @@ on:
     paths:
       - 'server/**'
       - '.pre-commit-config.yaml'
+      - '.github/workflows/py-lint.yml'
   push:
     branches: [main, v2.0]
     paths:
       - 'server/**'
       - '.pre-commit-config.yaml'
+      - '.github/workflows/py-lint.yml'
 
 jobs:
   pre_commit_checks:
