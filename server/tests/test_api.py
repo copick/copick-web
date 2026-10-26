@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 
 import numpy as np
@@ -9,7 +10,7 @@ import pytest
 
 from copick_web.app.services import compat
 
-from .fixtures.make_demo_project import PICKS, RUN, VOXEL_SIZE
+from .fixtures.make_demo_project import MESH_BOUNDS, PICKS, RUN, VOXEL_SIZE
 
 needs_filaments = pytest.mark.skipif(not compat.HAS_FILAMENTS, reason="copick without filaments")
 needs_seg_types = pytest.mark.skipif(not compat.HAS_SEG_TYPES, reason="copick without typed segmentations")
@@ -161,6 +162,33 @@ def test_filaments_list_and_detail(client):
     assert first["radius"] == 125.0
     assert detail["filaments"][1]["radius"] is None
     assert client.get(f"/api/projects/demo/runs/{RUN}/filaments/microtubule/bob/1").status_code == 404
+
+
+# --- Meshes ------------------------------------------------------------------------------------------------------------
+
+
+def test_meshes_list_and_file(client):
+    import trimesh
+
+    assert client.get(f"/api/projects/demo/runs/{RUN}/meshes").json() == [
+        {"object_name": "membrane", "user_id": "alice", "session_id": "1", "color": [0, 0, 255, 255]}
+    ]
+    response = client.get(f"/api/projects/demo/runs/{RUN}/meshes/membrane/alice/1.glb")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "model/gltf-binary"
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.content[:4] == b"glTF"
+    # Served as stored: x, y, z in Angstrom.
+    mesh = trimesh.load(io.BytesIO(response.content), file_type="glb")
+    assert mesh.bounds == pytest.approx(np.array(MESH_BOUNDS))
+
+
+def test_missing_meshes(client):
+    base = f"/api/projects/demo/runs/{RUN}/meshes"
+    assert client.get(f"{base}/membrane/bob/1.glb").status_code == 404
+    assert client.get(f"{base}/ribosome/alice/1.glb").status_code == 404
+    assert client.get("/api/projects/demo/runs/TS_404/meshes").status_code == 404
+    assert client.get("/api/projects/demo/runs/TS_404/meshes/membrane/alice/1.glb").status_code == 404
 
 
 # --- An older copick -------------------------------------------------------------------------------------------------

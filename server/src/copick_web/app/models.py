@@ -284,6 +284,15 @@ class FilamentResponse(BaseModel):
     metadata: dict[str, Any] = {}
 
 
+class MeshSummaryResponse(BaseModel):
+    """A mesh of a run (one object, user and session); its vertices are in Angstrom, x/y/z."""
+
+    object_name: str
+    user_id: str
+    session_id: str
+    color: tuple[int, int, int, int]
+
+
 class FilamentsSummaryResponse(BaseModel):
     """Summary of a set of filaments (one object, user and session)."""
 
