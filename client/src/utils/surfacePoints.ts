@@ -5,6 +5,7 @@
  */
 
 import type { LabelColorMapProps } from "./labelColors";
+import { brightness } from "./lighting";
 
 export interface SurfacePoints {
   /** Voxel centres, (x, y, z) Å, interleaved. */
@@ -64,28 +65,25 @@ export function pointColor(
   coloring: SurfaceColoring,
   i: number,
 ): Rgba01 | null {
+  return valueColor(points.values, coloring, i * points.channels);
+}
+
+/**
+ * The colour of a value given per channel (from `offset` in `values`), or null when every map leaves it
+ * transparent.
+ */
+export function valueColor(
+  values: ArrayLike<number>,
+  coloring: SurfaceColoring,
+  offset = 0,
+): Rgba01 | null {
   let color: Rgba01 | null = null;
   for (const { channel, map } of coloring) {
-    const c = labelColor(map, points.values[i * points.channels + channel]);
+    const c = labelColor(map, values[offset + channel]);
     if (c[3] > 0) color = c;
   }
   return color;
 }
 
-const KEY_LIGHT = normalize([0.35, -0.45, 0.82]);
-const FILL_LIGHT = normalize([-0.5, 0.4, -0.3]);
-
-function normalize(v: number[]): [number, number, number] {
-  const l = Math.hypot(v[0], v[1], v[2]) || 1;
-  return [v[0] / l, v[1] / l, v[2] / l];
-}
-
-/** Brightness (0-1) of a point from its outward normal: a key and a fill light. */
-export function shade(nx: number, ny: number, nz: number): number {
-  const l = Math.hypot(nx, ny, nz);
-  if (l === 0) return 0.8;
-  const key = (nx * KEY_LIGHT[0] + ny * KEY_LIGHT[1] + nz * KEY_LIGHT[2]) / l;
-  const fill =
-    (nx * FILL_LIGHT[0] + ny * FILL_LIGHT[1] + nz * FILL_LIGHT[2]) / l;
-  return Math.min(1, 0.42 + 0.5 * Math.max(0, key) + 0.18 * Math.max(0, fill));
-}
+/** Brightness (0-1) of a point from its outward normal (see `lighting.ts`). */
+export const shade = brightness;

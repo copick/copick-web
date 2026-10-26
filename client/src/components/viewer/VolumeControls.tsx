@@ -1,4 +1,4 @@
-/** Controls of the 3D volume view: threshold, opacity and detail level. */
+/** Controls of the 3D view: volume threshold, opacity and detail level, and how segmentations are drawn. */
 
 import {
   Box,
@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { VolumeSettings } from "./useVolumeView";
+import { useLayout, type SurfaceStyle } from "@/contexts/LayoutContext";
 
 interface VolumeControlsProps {
   settings: VolumeSettings;
@@ -22,6 +23,7 @@ export function VolumeControls({
   onChange,
 }: VolumeControlsProps) {
   const lod = settings.lod ?? maxLod;
+  const { surfaceStyle, setSurfaceStyle } = useLayout();
   return (
     <Paper
       elevation={3}
@@ -94,6 +96,22 @@ export function VolumeControls({
             {i === 0 ? " · finest" : ""}
           </MenuItem>
         ))}
+      </Select>
+      <Select
+        size="small"
+        variant="standard"
+        value={surfaceStyle}
+        onChange={(e) => setSurfaceStyle(e.target.value as SurfaceStyle)}
+        renderValue={(v) => (v === "mesh" ? "Segs · mesh" : "Segs · points")}
+        sx={{ color: "common.white", fontSize: 12 }}
+        aria-label="Segmentations in 3D"
+      >
+        <MenuItem value="mesh" sx={{ fontSize: 12 }}>
+          Segmentations as smoothed surfaces
+        </MenuItem>
+        <MenuItem value="points" sx={{ fontSize: 12 }}>
+          Segmentations as boundary voxels
+        </MenuItem>
       </Select>
     </Paper>
   );
