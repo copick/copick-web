@@ -1,7 +1,7 @@
 /**
  * A single-channel view of a multi-channel chunk source.
  *
- * idetik 0.35's `LabelLayer` refuses multi-channel sources, but a panoptic
+ * idetik's `LabelLayer` refuses multi-channel sources (0.35 and 0.49), but a panoptic
  * segmentation is a `(2, Z, Y, X)` store (channel 0: object label, channel 1:
  * instance ID). This wrapper exposes one channel as a `(Z, Y, X)` source: its
  * dimension map has no `c` axis, and each chunk request is forwarded to the
@@ -10,7 +10,8 @@
  * It relies on idetik's structural `ChunkSource` contract (a `loader` with
  * `getSourceDimensionMap`, `getBytesPerElement` and `loadChunkData`) and on
  * the base OME-Zarr loader deriving the channel from `chunk.chunkIndex.c`;
- * `@idetik/core` is pinned to exactly 0.35.0 for that reason.
+ * `@idetik/core` is pinned to an exact version (0.49.0) for that reason; recheck
+ * both on every upgrade.
  *
  * Share one view per (source, channel) between layers: idetik keys its chunk
  * cache by source identity.
