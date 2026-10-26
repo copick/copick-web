@@ -269,6 +269,14 @@ export interface FilamentResponse {
   metadata?: Record<string, unknown>;
 }
 
+/** A mesh of a run (one object, user and session); its GLB vertices are in Å, x/y/z. */
+export interface MeshSummaryResponse {
+  object_name: string;
+  user_id: string;
+  session_id: string;
+  color: [number, number, number, number];
+}
+
 export interface FilamentsSummaryResponse {
   object_name: string;
   user_id: string;

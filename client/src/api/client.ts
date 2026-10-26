@@ -7,6 +7,7 @@ import type {
   FilamentsDetailResponse,
   FilamentsSummaryResponse,
   InstancesResponse,
+  MeshSummaryResponse,
   ObjectTypeFields,
   ObjectTypesResponse,
   SaveFilamentsRequest,
@@ -160,11 +161,11 @@ const segmentation = (
 ) =>
   `${run(projectId, runName)}/segmentations/${segType}/${enc(name)}/${enc(userId)}/${enc(sessionId)}/${voxelSize}`;
 
-/** Path of one annotation set (object, user, session) of a kind (`picks`, `filaments`) in a run. */
+/** Path of one annotation set (object, user, session) of a kind (`picks`, `filaments`, `meshes`) in a run. */
 const annotation = (
   projectId: string,
   runName: string,
-  kind: "picks" | "filaments",
+  kind: "picks" | "filaments" | "meshes",
   objectName: string,
   userId: string,
   sessionId: string,
@@ -297,6 +298,20 @@ export const api = {
         `${segmentation(projectId, runName, segType, name, userId, sessionId, voxelSize)}/surface`,
       ),
     ),
+
+  // Mesh endpoints
+  getMeshes: (projectId: string, runName: string) =>
+    fetchJson<MeshSummaryResponse[]>(`${run(projectId, runName)}/meshes`),
+
+  /** URL of a mesh's GLB file (idetik's mesh loader takes URLs ending in `.glb`). */
+  meshUrl: (
+    projectId: string,
+    runName: string,
+    objectName: string,
+    userId: string,
+    sessionId: string,
+  ) =>
+    `${API_BASE}${annotation(projectId, runName, "meshes", objectName, userId, sessionId)}.glb`,
 
   // Filaments endpoints
   getFilaments: (projectId: string, runName: string) =>

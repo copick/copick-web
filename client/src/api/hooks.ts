@@ -7,6 +7,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { MeshSource } from "@idetik/core";
 import { api } from "./client";
 import { clearThumbnails } from "@/components/gallery/thumbnails";
 import { useProjectId } from "@/contexts/CopickContext";
@@ -75,11 +76,11 @@ export function useEditObjectType() {
           : api.deleteObjectType(projectId, change.version, change.name),
     onSuccess: (data) => {
       queryClient.setQueryData(["object-types", projectId], data);
-      // Object colours, radii and labels feed the tables and every overlay (not voxel data: surfaces, instances).
+      // Object colours, radii and labels feed the tables and every overlay (not geometry: surfaces, instances, meshes).
       queryClient.invalidateQueries({
         predicate: (q) =>
           q.queryKey[1] === projectId &&
-          !["object-types", "surface", "instances"].includes(
+          !["object-types", "surface", "instances", "mesh"].includes(
             String(q.queryKey[0]),
           ),
       });
@@ -268,6 +269,47 @@ export function useSurfacePoints(
         seg!.voxelSize,
       ),
     enabled: enabled && !!runName && !!seg,
+    staleTime: Infinity,
+    gcTime: 60_000,
+  });
+}
+
+export function useMeshes(runName: string | null, enabled = true) {
+  const projectId = useProjectId();
+  return useQuery({
+    queryKey: ["meshes", projectId, runName],
+    queryFn: () => api.getMeshes(projectId, runName!),
+    enabled: !!runName && enabled,
+  });
+}
+
+/** A mesh's geometry, loaded by idetik's GLB loader (one merged triangle mesh, vertices in Å). */
+export function useMeshGeometry(
+  runName: string | null,
+  mesh: { objectName: string; userId: string; sessionId: string } | null,
+  enabled: boolean,
+) {
+  const projectId = useProjectId();
+  return useQuery({
+    queryKey: [
+      "mesh",
+      projectId,
+      runName,
+      mesh?.objectName,
+      mesh?.userId,
+      mesh?.sessionId,
+    ],
+    queryFn: () =>
+      new MeshSource({
+        url: api.meshUrl(
+          projectId,
+          runName!,
+          mesh!.objectName,
+          mesh!.userId,
+          mesh!.sessionId,
+        ),
+      }).load(),
+    enabled: enabled && !!runName && !!mesh,
     staleTime: Infinity,
     gcTime: 60_000,
   });
