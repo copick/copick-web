@@ -25,6 +25,8 @@ import type { MarkerStyle } from "@/idetik/PickMarkersLayer";
 
 export type LayoutMode = "single" | "multi";
 export type ViewAxis = "xy" | "xz" | "yz";
+/** How segmentations are drawn in the 3D view: isosurface meshes, or their boundary voxels as points. */
+export type SurfaceStyle = "mesh" | "points";
 
 const AXIS_PANE: Record<ViewAxis, number> = { xy: 0, xz: 1, yz: 2 };
 // Versioned with the pane default (XY + 3D, multi layout), see lifecycle.ts.
@@ -34,6 +36,8 @@ interface StoredLayout {
   mode: LayoutMode;
   axis: ViewAxis;
   markerStyle: MarkerStyle;
+  /** Missing in layouts stored before it existed. */
+  surfaceStyle?: SurfaceStyle;
 }
 
 function isStoredLayout(value: unknown): value is StoredLayout {
@@ -42,7 +46,10 @@ function isStoredLayout(value: unknown): value is StoredLayout {
     !!v &&
     (v.mode === "single" || v.mode === "multi") &&
     (v.axis === "xy" || v.axis === "xz" || v.axis === "yz") &&
-    (v.markerStyle === "dots" || v.markerStyle === "shells")
+    (v.markerStyle === "dots" || v.markerStyle === "shells") &&
+    (v.surfaceStyle === undefined ||
+      v.surfaceStyle === "mesh" ||
+      v.surfaceStyle === "points")
   );
 }
 
@@ -63,6 +70,7 @@ interface LayoutContextType {
   mode: LayoutMode;
   axis: ViewAxis;
   markerStyle: MarkerStyle;
+  surfaceStyle: SurfaceStyle;
   /** Panes the multi layout shows (XY, XZ, YZ, 3D). */
   multiVisible: boolean[];
   /** Panes currently shown. */
@@ -70,6 +78,7 @@ interface LayoutContextType {
   setMode: (mode: LayoutMode) => void;
   setAxis: (axis: ViewAxis) => void;
   setMarkerStyle: (style: MarkerStyle) => void;
+  setSurfaceStyle: (style: SurfaceStyle) => void;
   togglePane: (index: number) => void;
 }
 
@@ -100,6 +109,10 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
     (markerStyle: MarkerStyle) => setStored((s) => ({ ...s, markerStyle })),
     [],
   );
+  const setSurfaceStyle = useCallback(
+    (surfaceStyle: SurfaceStyle) => setStored((s) => ({ ...s, surfaceStyle })),
+    [],
+  );
   const togglePane = useCallback((index: number) => {
     setMultiVisible((old) => {
       const next = old.map((v, i) => (i === index ? !v : v));
@@ -115,11 +128,13 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       ...stored,
+      surfaceStyle: stored.surfaceStyle ?? "mesh",
       multiVisible,
       visible,
       setMode,
       setAxis,
       setMarkerStyle,
+      setSurfaceStyle,
       togglePane,
     }),
     [
@@ -129,6 +144,7 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
       setMode,
       setAxis,
       setMarkerStyle,
+      setSurfaceStyle,
       togglePane,
     ],
   );

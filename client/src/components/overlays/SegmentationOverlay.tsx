@@ -20,7 +20,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Box, Chip } from "@mui/material";
 import { LabelLayer, OmeZarrImageSource } from "@idetik/core";
-import { useSegmentations, useObjects, useSurfacePoints } from "@/api/hooks";
+import {
+  useSegmentations,
+  useObjects,
+  useSegmentationMeshes,
+  useSurfacePoints,
+} from "@/api/hooks";
 import { appUrl } from "@/api/client";
 import {
   segmentationTypeOf,
@@ -33,6 +38,7 @@ import {
   type SegmentationSelection,
 } from "@/contexts/CopickContext";
 import { useScene } from "@/contexts/SceneContext";
+import { useLayout } from "@/contexts/LayoutContext";
 import { useLatestRef } from "@/utils/useLatestRef";
 import {
   layerStatusFromError,
@@ -44,7 +50,10 @@ import { isAbortError, withSceneSignal } from "@/idetik/lifecycle";
 import { sourcePolicy } from "@/idetik/policy";
 import { usePerViewportLayers } from "@/components/viewer/usePerViewportLayers";
 import { SurfacePointsLayer } from "@/idetik/SurfacePointsLayer";
+import { MeshObjectsLayer } from "@/idetik/MeshObjectsLayer";
+import type { ChunkLoaderLike } from "@/idetik/ChannelViewSource";
 import type { SurfaceColoring } from "@/utils/surfacePoints";
+import { meshParts } from "@/utils/meshParts";
 import {
   binaryColorMap,
   instanceColorMap,
@@ -235,6 +244,16 @@ function SegmentationLayers({
     [objectColorKey],
   );
 
+  const { surfaceStyle } = useLayout();
+  // The store the 2D layers read, for the isosurfaces: its loader, or one per channel of a panoptic segmentation.
+  const loaders = useMemo<ChunkLoaderLike[] | null>(
+    () =>
+      opened
+        ? (opened.channels?.map((c) => c.loader) ?? [opened.base.loader])
+        : null,
+    [opened],
+  );
+
   const objectName = (label: number) =>
     objects.find((o) => o.label === label)?.name ?? `label ${label}`;
 
@@ -269,14 +288,23 @@ function SegmentationLayers({
                   : binaryMap,
           },
         ];
-  const surface = (
-    <SurfacePoints3D
-      segKey={segKey}
-      runName={runName}
-      selection={selection}
-      coloring={coloring}
-    />
-  );
+  const surface =
+    surfaceStyle === "mesh" ? (
+      <SegmentationMesh3D
+        segKey={segKey}
+        runName={runName}
+        selection={selection}
+        coloring={coloring}
+        loaders={loaders}
+      />
+    ) : (
+      <SurfacePoints3D
+        segKey={segKey}
+        runName={runName}
+        selection={selection}
+        coloring={coloring}
+      />
+    );
 
   if (!opened) return surface;
 
@@ -376,6 +404,52 @@ function SurfacePoints3D({
           })
       : null,
     [points, coloringKey, perUnit],
+  );
+  return null;
+}
+
+/**
+ * The segmentation in the 3D view as isosurfaces: computed in the browser from the store the 2D layers read
+ * (while the 3D pane is shown), then coloured like the 2D layers. Colour changes (hidden / solo IDs, panoptic
+ * mode) regroup the meshes without computing them again.
+ */
+function SegmentationMesh3D({
+  segKey,
+  runName,
+  selection,
+  coloring,
+  loaders,
+}: {
+  segKey: string;
+  runName: string | null;
+  selection: SegmentationSelection;
+  coloring: SurfaceColoring;
+  loaders: ChunkLoaderLike[] | null;
+}) {
+  const { scene, visible } = useScene();
+  const { setStatus } = useLayerStatus();
+  const show3d = visible[VIEW_IDS.indexOf("3D")];
+  const { data, error } = useSegmentationMeshes(
+    runName,
+    selection,
+    loaders,
+    show3d,
+  );
+  const coloringKey = JSON.stringify(coloring, (_, v) =>
+    v instanceof Map ? [...v.entries()] : v,
+  );
+
+  useEffect(() => {
+    if (error && !isAbortError(error))
+      setStatus(segKey, layerStatusFromError(error));
+  }, [error, segKey, setStatus]);
+
+  usePerViewportLayers(
+    ["3D"],
+    scene && data && data.meshes.length > 0
+      ? () => new MeshObjectsLayer(meshParts(data.meshes, coloring), 1)
+      : null,
+    [data, coloringKey],
   );
   return null;
 }

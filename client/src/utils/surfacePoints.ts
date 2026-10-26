@@ -64,9 +64,21 @@ export function pointColor(
   coloring: SurfaceColoring,
   i: number,
 ): Rgba01 | null {
+  return valueColor(points.values, coloring, i * points.channels);
+}
+
+/**
+ * The colour of a value given per channel (from `offset` in `values`), or null when every map leaves it
+ * transparent.
+ */
+export function valueColor(
+  values: ArrayLike<number>,
+  coloring: SurfaceColoring,
+  offset = 0,
+): Rgba01 | null {
   let color: Rgba01 | null = null;
   for (const { channel, map } of coloring) {
-    const c = labelColor(map, points.values[i * points.channels + channel]);
+    const c = labelColor(map, values[offset + channel]);
     if (c[3] > 0) color = c;
   }
   return color;
