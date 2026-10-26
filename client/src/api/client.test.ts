@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { appBaseOf, appUrl } from "./client";
+import { API_BASE, api, appBaseOf, appUrl } from "./client";
 
 describe("app URLs under a URL prefix", () => {
   test.each([
@@ -27,6 +27,24 @@ describe("app URLs under a URL prefix", () => {
     // an absolute path from an older server stays under the prefix too
     expect(appUrl("/zarr/tomo/TS_001/10/wbp", base)).toBe(
       "https://ood.example.org/rnode/gpu-17/8123/zarr/tomo/TS_001/10/wbp",
+    );
+  });
+});
+
+describe("mesh URLs", () => {
+  test("end in .glb (idetik's mesh loader needs it) and encode names", () => {
+    const url = api.meshUrl(
+      "p1",
+      "TS 001",
+      "valid-sample",
+      "boundary-clean",
+      "0",
+    );
+    expect(url).toBe(
+      `${API_BASE}/projects/p1/runs/TS%20001/meshes/valid-sample/boundary-clean/0.glb`,
+    );
+    expect(new URL(url, "http://localhost/").pathname.endsWith(".glb")).toBe(
+      true,
     );
   });
 });

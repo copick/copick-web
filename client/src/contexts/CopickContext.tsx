@@ -58,6 +58,14 @@ export interface FilamentsSelection {
   selectedId: number | null;
 }
 
+/** A copick mesh (drawn in the 3D view only). */
+export interface MeshSelection {
+  objectName: string;
+  userId: string;
+  sessionId: string;
+  visible: boolean;
+}
+
 /** Since instance and panoptic segmentations, the type is part of a segmentation's identity. */
 // eslint-disable-next-line react-refresh/only-export-components
 export function segmentationKey(seg: SegmentationIdentity): string {
@@ -71,6 +79,15 @@ export function filamentsKey(f: {
   sessionId: string;
 }): string {
   return `${f.objectName}:${f.userId}:${f.sessionId}`;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function meshKey(m: {
+  objectName: string;
+  userId: string;
+  sessionId: string;
+}): string {
+  return `mesh:${m.objectName}:${m.userId}:${m.sessionId}`;
 }
 
 export const MAX_HIDDEN_IDS = 62;
@@ -90,6 +107,7 @@ export interface CopickState {
   selectedPicks: PickSelection[];
   selectedSegmentations: SegmentationSelection[];
   selectedFilaments: FilamentsSelection[];
+  selectedMeshes: MeshSelection[];
 }
 
 // Action types
@@ -137,7 +155,9 @@ type CopickAction =
       type: "ADD_FILAMENTS";
       filaments: Omit<FilamentsSelection, "visible" | "selectedId">;
     }
-  | { type: "SELECT_FILAMENT"; key: string; instanceId: number | null };
+  | { type: "SELECT_FILAMENT"; key: string; instanceId: number | null }
+  | { type: "TOGGLE_MESH_VISIBILITY"; key: string }
+  | { type: "ADD_MESH"; mesh: Omit<MeshSelection, "visible"> };
 
 // Initial state
 const initialState: CopickState = {
@@ -147,6 +167,7 @@ const initialState: CopickState = {
   selectedPicks: [],
   selectedSegmentations: [],
   selectedFilaments: [],
+  selectedMeshes: [],
 };
 
 // Reducer
@@ -308,6 +329,32 @@ function copickReducer(state: CopickState, action: CopickAction): CopickState {
         ),
       };
 
+    case "TOGGLE_MESH_VISIBILITY":
+      return {
+        ...state,
+        selectedMeshes: state.selectedMeshes.map((m) =>
+          meshKey(m) === action.key ? { ...m, visible: !m.visible } : m,
+        ),
+      };
+
+    case "ADD_MESH": {
+      const key = meshKey(action.mesh);
+      if (state.selectedMeshes.some((m) => meshKey(m) === key))
+        return {
+          ...state,
+          selectedMeshes: state.selectedMeshes.map((m) =>
+            meshKey(m) === key ? { ...m, visible: true } : m,
+          ),
+        };
+      return {
+        ...state,
+        selectedMeshes: [
+          ...state.selectedMeshes,
+          { ...action.mesh, visible: true },
+        ],
+      };
+    }
+
     default:
       return state;
   }
@@ -347,6 +394,8 @@ interface CopickContextType {
   toggleFilamentsVisibility: (key: string) => void;
   addFilaments: (f: Omit<FilamentsSelection, "visible" | "selectedId">) => void;
   selectFilament: (key: string, instanceId: number | null) => void;
+  toggleMeshVisibility: (key: string) => void;
+  addMesh: (m: Omit<MeshSelection, "visible">) => void;
 }
 
 const CopickContext = createContext<CopickContextType | null>(null);
@@ -397,6 +446,9 @@ export function CopickProvider({
         dispatch({ type: "ADD_FILAMENTS", filaments }),
       selectFilament: (key, instanceId) =>
         dispatch({ type: "SELECT_FILAMENT", key, instanceId }),
+      toggleMeshVisibility: (key) =>
+        dispatch({ type: "TOGGLE_MESH_VISIBILITY", key }),
+      addMesh: (mesh) => dispatch({ type: "ADD_MESH", mesh }),
     }),
     [],
   );

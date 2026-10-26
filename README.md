@@ -18,6 +18,7 @@ copick-web consists of two components:
 - Linked XY / XZ / YZ orthoslices with crosshairs and a 3D volume view (or a single plane), panes toggleable
 - Display particle picks as point overlays (dots or physical radius shells), coloured per instance ID for filament objects
 - Filaments (ordered centrelines) drawn as dense points, coloured per filament ID
+- Meshes (copick's GLB triangle meshes) drawn in the 3D view in their object's colour
 - Segmentation overlays: binary, multilabel, instance (shared instance palette, click to identify, instance browser) and panoptic (objects / instances / both)
 - Newer copick features (filaments, instance and panoptic segmentations) are detected at runtime; older copick versions keep working
 - Multi-tenant: host many copick projects from one server, sourced from local
@@ -271,6 +272,8 @@ All metadata and zarr-proxy routes are scoped under a `project_id`.
 - `GET /api/projects/{project_id}/runs/{run}/segmentations` - List of segmentations (with `segmentation_type`; filter with `?segmentation_type=`)
 - `GET /api/projects/{project_id}/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/instances?level=1` - Instance voxel counts and centroids (instance / panoptic)
 - `GET /api/projects/{project_id}/runs/{run}/segmentations/{type}/{name}/{user}/{session}/{vs}/surface` - Boundary voxels for the 3D view
+- `GET /api/projects/{project_id}/runs/{run}/meshes` - Meshes of a run
+- `GET /api/projects/{project_id}/runs/{run}/meshes/{obj}/{user}/{session}.glb` - A mesh's GLB file as stored (vertices in Å, x/y/z)
 - `GET /api/projects/{project_id}/runs/{run}/filaments` - Filament sets (empty on a copick without filaments)
 - `GET|PUT|DELETE /api/projects/{project_id}/runs/{run}/filaments/{obj}/{user}/{session}` - Filament centrelines (501 on a copick without filaments)
 

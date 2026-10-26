@@ -350,6 +350,33 @@ class CopickService:
         self._measurements.put(key, result)
         return result
 
+    # --- Meshes (3D view) ---
+
+    def get_meshes(
+        self,
+        run_name: str,
+        object_name: Optional[str] = None,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> list:
+        """Get the meshes of a run (empty for an unknown run)."""
+        run = self.get_run(run_name)
+        if not run:
+            return []
+        return run.get_meshes(object_name=object_name, user_id=user_id, session_id=session_id)
+
+    def read_mesh(self, run_name: str, object_name: str, user_id: str, session_id: str) -> Optional[bytes]:
+        """The GLB file of one mesh as stored (vertices in Angstrom, x/y/z), or None if there is no such mesh.
+
+        The mesh is looked up through copick, so the path never comes from the request.
+        """
+        meshes = self.get_meshes(run_name, object_name, user_id, session_id)
+        if not meshes:
+            return None
+        mesh = meshes[0]
+        with mesh.fs.open(mesh.path, "rb") as f:
+            return f.read()
+
     # --- Filaments ---
 
     def get_filaments(
