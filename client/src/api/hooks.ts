@@ -13,6 +13,7 @@ import { segmentationMeshes } from "@/isosurface/computeMeshes";
 import { api } from "./client";
 import { clearThumbnails } from "@/components/gallery/thumbnails";
 import { useProjectId } from "@/contexts/CopickContext";
+import { canEdit } from "@/utils/readOnly";
 import type {
   CreatePicksRequest,
   ObjectTypeFields,
@@ -35,6 +36,12 @@ export function useConfig() {
     queryKey: ["config", projectId],
     queryFn: () => api.getConfig(projectId),
   });
+}
+
+/** Whether the project may be changed from this page (false on a read-only server, and until the config arrives). */
+export function useCanEdit() {
+  const { data } = useConfig();
+  return canEdit(data);
 }
 
 export function useObjects() {
