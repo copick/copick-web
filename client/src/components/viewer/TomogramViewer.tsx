@@ -53,6 +53,7 @@ import { PickingEventHandler } from "@/components/picking/PickingEventHandler";
 import { FilamentEditToolbar } from "@/components/filaments/FilamentEditToolbar";
 import { FilamentEditEventHandler } from "@/components/filaments/FilamentEditEventHandler";
 import { appUrl } from "@/api/client";
+import { useCanEdit } from "@/api/hooks";
 
 const STAGE_LABEL = {
   xy: "Loading XY first…",
@@ -164,6 +165,9 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
     return () => bridge.register(null);
   }, [bridge, focusAngstrom]);
 
+  // Editing toolbars and handlers only where the project may be changed (not on a read-only server).
+  const editable = useCanEdit();
+
   // Double-click focus is off while placing or deleting picks.
   const { state: pickingState, isEditing } = usePicking();
   const allowFocusRef = useLatestRef(
@@ -240,8 +244,8 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
     <SceneContext.Provider value={sceneValue}>
       <SliceContext.Provider value={sliceValue}>
         <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          <PickingToolbar />
-          <FilamentEditToolbar />
+          {editable && <PickingToolbar />}
+          {editable && <FilamentEditToolbar />}
           <ViewerControls onResetViews={resetViews} />
           <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
             <ViewerStage
@@ -255,8 +259,8 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
             <InteractivePicksOverlay />
             <FilamentsOverlay />
             <MeshOverlay />
-            <PickingEventHandler paneRefs={paneRefs} />
-            <FilamentEditEventHandler paneRefs={paneRefs} />
+            {editable && <PickingEventHandler paneRefs={paneRefs} />}
+            {editable && <FilamentEditEventHandler paneRefs={paneRefs} />}
 
             <Box
               sx={{

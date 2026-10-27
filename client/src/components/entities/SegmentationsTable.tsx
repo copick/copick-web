@@ -39,9 +39,9 @@ import {
   segmentationKey,
   useCopick,
   type PanopticMode,
-  type SegmentationIdentity,
 } from "@/contexts/CopickContext";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
+import { segmentationIdentity } from "@/utils/segmentationIdentity";
 import { matchesSearch, noMatchText } from "@/utils/tableSearch";
 import { TableSearch } from "./TableSearch";
 import { EntityNameCell } from "./EntityNameCell";
@@ -76,16 +76,6 @@ const TYPE_COLOR: Record<
   instance: "primary",
   panoptic: "secondary",
 };
-
-function identityOf(seg: SegmentationSummaryResponse): SegmentationIdentity {
-  return {
-    name: seg.name,
-    userId: seg.user_id,
-    sessionId: seg.session_id,
-    voxelSize: seg.voxel_size,
-    segmentationType: segmentationTypeOf(seg),
-  };
-}
 
 export function SegmentationsTable({
   runName,
@@ -143,7 +133,7 @@ export function SegmentationsTable({
       .map((s) => segmentationKey(s)),
   );
   const isDisplayed = (s: SegmentationSummaryResponse) =>
-    displayedKeys.has(segmentationKey(identityOf(s)));
+    displayedKeys.has(segmentationKey(segmentationIdentity(s)));
   const shown = segmentations.filter(
     (s) =>
       (!shownOnly || isDisplayed(s)) &&
@@ -158,12 +148,12 @@ export function SegmentationsTable({
   );
 
   const selectionOf = (seg: SegmentationSummaryResponse) => {
-    const key = segmentationKey(identityOf(seg));
+    const key = segmentationKey(segmentationIdentity(seg));
     return state.selectedSegmentations.find((s) => segmentationKey(s) === key);
   };
 
   const handleToggle = (seg: SegmentationSummaryResponse) => {
-    const identity = identityOf(seg);
+    const identity = segmentationIdentity(seg);
     if (selectionOf(seg))
       toggleSegmentationVisibility(segmentationKey(identity));
     else addSegmentation(identity);
@@ -227,7 +217,7 @@ export function SegmentationsTable({
           <TableBody>
             {shown.map((seg) => {
               const type = segmentationTypeOf(seg);
-              const identity = identityOf(seg);
+              const identity = segmentationIdentity(seg);
               const key = segmentationKey(identity);
               const selection = selectionOf(seg);
               const visible = selection?.visible ?? false;

@@ -14,7 +14,7 @@ import {
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { Category as ObjectTypesIcon } from "@mui/icons-material";
 import { Link } from "react-router-dom";
-import { useConfig, useProjects } from "@/api/hooks";
+import { useCanEdit, useConfig, useProjects } from "@/api/hooks";
 import { appUrl } from "@/api/client";
 import { useProjectId } from "@/contexts/CopickContext";
 import { RunTree } from "@/components/navigation/RunTree";
@@ -26,6 +26,7 @@ export function Sidebar() {
   const projectId = useProjectId();
   const { data: config } = useConfig();
   const { data: projects } = useProjects();
+  const editable = useCanEdit();
   const [objectTypesOpen, setObjectTypesOpen] = useState(false);
   const showBackLink = (projects?.length ?? 0) > 1;
 
@@ -63,15 +64,17 @@ export function Sidebar() {
             {config?.name ?? projectId}
           </Typography>
           <ReloadProjectButton />
-          <Tooltip title="Object types: names, colours, labels…">
-            <IconButton
-              size="small"
-              aria-label="Edit object types"
-              onClick={() => setObjectTypesOpen(true)}
-            >
-              <ObjectTypesIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          {editable && (
+            <Tooltip title="Object types: names, colours, labels…">
+              <IconButton
+                size="small"
+                aria-label="Edit object types"
+                onClick={() => setObjectTypesOpen(true)}
+              >
+                <ObjectTypesIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
         {config?.description && (
           <Typography
@@ -103,10 +106,12 @@ export function Sidebar() {
 
       <Divider />
 
-      <ObjectTypesDialog
-        open={objectTypesOpen}
-        onClose={() => setObjectTypesOpen(false)}
-      />
+      {editable && (
+        <ObjectTypesDialog
+          open={objectTypesOpen}
+          onClose={() => setObjectTypesOpen(false)}
+        />
+      )}
 
       {/* Entity tabs */}
       <Box sx={{ flexShrink: 0, height: "50%", overflow: "auto" }}>

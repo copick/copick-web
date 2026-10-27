@@ -11,7 +11,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import ValidationError
 
-from ..dependencies import get_copick_service
+from ..dependencies import WRITES, get_copick_service
 from ..models import (
     FilamentCurveModel,
     FilamentResponse,
@@ -121,6 +121,7 @@ def _check_writable(object_name: str, user_id: str, session_id: str) -> None:
 @router.put(
     "/runs/{run_name}/filaments/{object_name}/{user_id}/{session_id}",
     response_model=SaveFilamentsResponse,
+    dependencies=WRITES,
 )
 def save_filaments(
     run_name: str,
@@ -153,7 +154,7 @@ def save_filaments(
     return SaveFilamentsResponse(filaments=_detail(service, object_name, user_id, session_id, fset), n_picks=n_picks)
 
 
-@router.delete("/runs/{run_name}/filaments/{object_name}/{user_id}/{session_id}")
+@router.delete("/runs/{run_name}/filaments/{object_name}/{user_id}/{session_id}", dependencies=WRITES)
 def delete_filaments(
     run_name: str,
     object_name: str,

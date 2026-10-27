@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     base_path: str = ""
+    # Refuse every change to project data (picks, filaments, object types) with 403; the client hides its editing tools.
+    read_only: bool = False
     # In-memory caches of derived data (env: THUMBNAIL_CACHE_MB, MEASUREMENT_CACHE_MB, CACHE_MAX_AGE_SECONDS,
     # CACHE_SWEEP_SECONDS). Entries older than the max age are dropped by a sweep every CACHE_SWEEP_SECONDS.
     thumbnail_cache_mb: int = 64

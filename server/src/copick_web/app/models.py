@@ -45,6 +45,8 @@ class ConfigResponse(BaseModel):
     user_id: Optional[str]
     session_id: Optional[str]
     features: FeaturesResponse = FeaturesResponse()
+    #: The server refuses changes to project data (picks, filaments, object types); the client hides its editing tools.
+    read_only: bool = False
 
 
 class PickableObjectResponse(BaseModel):
