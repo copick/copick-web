@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.7](https://github.com/copick/copick-web/compare/server-v0.1.6...server-v0.1.7) (2026-10-27)
+
+
+### Features
+
+* embeddable read-only app factory, and ?session= to show one session's layers ([#101](https://github.com/copick/copick-web/issues/101)) ([a88b961](https://github.com/copick/copick-web/commit/a88b961a1323de15db0dd4f962aaf4403b313200))
+
 ## [0.1.6](https://github.com/copick/copick-web/compare/server-v0.1.5...server-v0.1.6) (2026-10-26)
 
 
