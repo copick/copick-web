@@ -2,10 +2,10 @@
 
 from typing import Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import ValidationError
 
-from ..dependencies import get_copick_service
+from ..dependencies import WRITES, get_copick_service, is_read_only
 from ..models import (
     ConfigResponse,
     FeaturesResponse,
@@ -28,8 +28,8 @@ router = APIRouter(prefix="/api/projects/{project_id}", tags=["config"])
 
 
 @router.get("/config", response_model=ConfigResponse)
-def get_config(service: CopickService = Depends(get_copick_service)) -> ConfigResponse:
-    """Get project configuration."""
+def get_config(request: Request, service: CopickService = Depends(get_copick_service)) -> ConfigResponse:
+    """Get project configuration, and whether this server refuses changes to it (``read_only``)."""
     config = service.config
     return ConfigResponse(
         name=config.name,
@@ -38,9 +38,11 @@ def get_config(service: CopickService = Depends(get_copick_service)) -> ConfigRe
         user_id=config.user_id,
         session_id=config.session_id,
         features=FeaturesResponse(**compat.features()),
+        read_only=is_read_only(request),
     )
 
 
+# Not a write: it re-reads the project, so a read-only server allows it.
 @router.post("/reload", response_model=ReloadResponse)
 def reload_project(service: CopickService = Depends(get_copick_service)) -> ReloadResponse:
     """Re-open the project from its configuration file, so runs, tomograms and annotations added since show up."""
@@ -90,11 +92,11 @@ def _object_type(obj) -> ObjectTypeFields:
     )
 
 
-def _object_types(service: CopickService) -> ObjectTypesResponse:
+def _object_types(service: CopickService, read_only: bool = False) -> ObjectTypesResponse:
     editor = service.object_types
     return ObjectTypesResponse(
         version=editor.version,
-        editable=editor.editable,
+        editable=editor.editable and not read_only,
         config_file=service.config_file.name if service.config_file is not None else None,
         suggested_label=editor.suggested_label(),
         objects=[_object_type(o) for o in editor.objects],
@@ -126,12 +128,12 @@ def _fields(request: ObjectTypeRequest) -> Tuple[dict, Optional[dict]]:
 
 
 @router.get("/object-types", response_model=ObjectTypesResponse)
-def get_object_types(service: CopickService = Depends(get_copick_service)) -> ObjectTypesResponse:
+def get_object_types(request: Request, service: CopickService = Depends(get_copick_service)) -> ObjectTypesResponse:
     """All object types with every editable field, the list version and whether the configuration can be written."""
-    return _object_types(service)
+    return _object_types(service, read_only=is_read_only(request))
 
 
-@router.post("/object-types", response_model=ObjectTypesResponse, status_code=201)
+@router.post("/object-types", response_model=ObjectTypesResponse, status_code=201, dependencies=WRITES)
 def create_object_type(
     request: ObjectTypeRequest,
     service: CopickService = Depends(get_copick_service),
@@ -141,7 +143,7 @@ def create_object_type(
     return _edit(service, lambda: service.object_types.create(request.version, fields, filament))
 
 
-@router.put("/object-types/{name}", response_model=ObjectTypesResponse)
+@router.put("/object-types/{name}", response_model=ObjectTypesResponse, dependencies=WRITES)
 def update_object_type(
     name: str,
     request: ObjectTypeRequest,
@@ -152,7 +154,7 @@ def update_object_type(
     return _edit(service, lambda: service.object_types.update(request.version, name, fields, filament))
 
 
-@router.delete("/object-types/{name}", response_model=ObjectTypesResponse)
+@router.delete("/object-types/{name}", response_model=ObjectTypesResponse, dependencies=WRITES)
 def delete_object_type(
     name: str,
     version: str = Query(...),

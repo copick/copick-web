@@ -1,6 +1,7 @@
 """In-process project registry: merges local configs with a registry API.
 
-- **Local**: registered at startup from ``COPICK_CONFIG_PATHS``.
+- **Local**: registered at startup from ``COPICK_CONFIG_PATHS`` (or ``create_app(configs=...)``), or at any time
+  later by an application that embeds copick-web (``app.state.registry.register_local``).
 
 - **Registry**: discovered by polling an external HTTP registry
   (``RegistryClient.list_projects``) which returns ``ProjectEntry`` rows
@@ -261,7 +262,13 @@ class ProjectRegistry:
     # --- Local registration ---
 
     def register_local(self, path: str) -> str:
-        """Register a local config file. Returns the assigned project id."""
+        """Register a local config file. Returns the assigned project id.
+
+        Idempotent: the id is derived from the file's parent directory and name, so registering the same file again
+        returns the same id (and re-reads its name and description). Works before and after the app has started. A
+        different file with the same parent directory and name takes the id over, and the project opened from the
+        previous one is dropped.
+        """
         resolved = Path(path).resolve()
         if not resolved.exists():
             raise FileNotFoundError(f"Local config not found: {resolved}")
@@ -274,6 +281,7 @@ class ProjectRegistry:
                 resolved,
                 existing.config_path,
             )
+            self.evict_service(pid)
         name, description = _read_config_metadata(resolved)
         self._local_projects[pid] = _LocalProject(
             id=pid,
@@ -450,7 +458,8 @@ def _cache_options() -> dict:
     }
 
 
-# Module-level singleton, populated by main.py lifespan.
+# Module-level registry, set by every ``create_app`` call (the last app built wins). Routes read their own app's
+# registry from ``request.app.state.registry``; this is only their fallback (see ``dependencies.get_registry``).
 project_registry: Optional[ProjectRegistry] = None
 
 

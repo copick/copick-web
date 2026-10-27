@@ -84,6 +84,7 @@ Options:
   --port INTEGER          Port to bind to (default: 8000)
   --no-browser            Don't open browser automatically
   --base-path TEXT        URL prefix of a proxy that forwards the full path (env: BASE_PATH)
+  --read-only             Refuse every change to project data; the UI hides its editing tools (env: READ_ONLY)
   --help                  Show this message and exit.
 
 At least one of CONFIGS, --config-dir, or --registry-url is required.
@@ -108,6 +109,56 @@ an HPC job lands on, or the sub-path a reverse proxy in front of the compose sta
   ```bash
   copick-web config.json --host 0.0.0.0 --port "$port" --no-browser --base-path "/node/$(hostname)/$port"
   ```
+
+### Read-only
+
+With `--read-only` (or `READ_ONLY=true`), every request that would change project data answers 403: creating,
+saving and deleting picks, saving (including picks sampled along filaments) and deleting filaments, and adding,
+changing and deleting object types. Reloading a project stays allowed, as it only re-reads it. The project config
+(`GET /api/projects/{project_id}/config`) carries `"read_only": true`, and the client then hides the picking toolbar,
+pick creation, editing and deletion, filament tracing and editing, and the object type editor. Viewing every layer
+works as before.
+
+### Embedding in another FastAPI application
+
+`create_app` builds a new, independent app each call, which another FastAPI application can mount under a prefix of
+its choosing and show in a same-origin iframe:
+
+```python
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from copick_web.app.main import create_app
+
+copick_app = create_app(read_only=True, allow_empty=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Starlette does not run a mounted app's lifespan (cache sweep, registry refresh): run it from the host's own.
+    async with copick_app.router.lifespan_context(copick_app):
+        yield
+
+
+host = FastAPI(lifespan=lifespan)
+host.mount("/copick-web", copick_app)
+
+project_id = copick_app.state.registry.register_local("/abs/path/copick_config.json")
+# the project is now at /copick-web/projects/<project_id>/
+```
+
+- `create_app(configs=(), base_path="", read_only=False, registry_url=None, allow_empty=False)`: `configs` are
+  registered when the app starts; `allow_empty=True` lets it start with no project source, for a host that registers
+  projects itself.
+- `app.state.registry` is the app's `ProjectRegistry`, created with the app: `register_local` is idempotent and works
+  before and after the app has started. Every app has its own registry, so several apps in one process stay apart.
+- Leave `base_path` empty when mounting: the mount supplies the prefix, and the client finds it from the page URL.
+- Other settings, such as cache sizes and CORS origins, come from the environment and `.env` as listed below.
+- copick-web does not configure logging when imported (the CLI does). copick itself, though, replaces the root
+  logger's handlers with its own when some of its modules are first imported, so a host may need to apply its logging
+  configuration after copick's modules are loaded.
+
+`copick_web.app.main:app` is the app built from those settings, as `uvicorn copick_web.app.main:app` serves it.
 
 ## Development
 
@@ -235,6 +286,7 @@ environment. List-typed values use JSON-array syntax.
 | `HOST` | `0.0.0.0` | Server host. |
 | `PORT` | `8000` | Server port. |
 | `BASE_PATH` | `""` | URL prefix of a reverse proxy that forwards it to the server (not needed when the proxy strips it). |
+| `READ_ONLY` | `false` | Refuse every change to project data with 403; the client hides its editing tools. |
 | `THUMBNAIL_CACHE_MB` | `64` | Run gallery thumbnail cache, per open project. |
 | `MEASUREMENT_CACHE_MB` | `512` | Instance measurement and segmentation surface cache, per open project. |
 | `CACHE_MAX_AGE_SECONDS` | `3600` | Cached entries older than this are dropped. |
@@ -255,7 +307,7 @@ All metadata and zarr-proxy routes are scoped under a `project_id`.
 
 ### Metadata (per project)
 
-- `GET /api/projects/{project_id}/config` - Project configuration
+- `GET /api/projects/{project_id}/config` - Project configuration, with `read_only` (the server refuses changes)
 - `POST /api/projects/{project_id}/reload` - Re-open the project, so runs and annotations added since show up
 - `GET /api/projects/{project_id}/objects` - Pickable objects
 - `GET|POST /api/projects/{project_id}/object-types`, `PUT|DELETE .../object-types/{name}` - Edit the object types in the project's configuration file
