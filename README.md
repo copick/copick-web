@@ -160,6 +160,15 @@ project_id = copick_app.state.registry.register_local("/abs/path/copick_config.j
 
 `copick_web.app.main:app` is the app built from those settings, as `uvicorn copick_web.app.main:app` serves it.
 
+### Showing one session's layers (`?session=`)
+
+A host that writes all of one job's entities under one copick session id can open a project with that session
+focused, for example `/copick-web/projects/<project_id>/?session=job007`. Every run opened from that page then shows
+the session's picks, segmentations, filaments and meshes, as if they had been switched on in the entity tables. They
+are added once per opened run, so a layer hidden afterwards stays hidden until another run is opened. Several sessions
+can be named, comma-separated (`?session=job007,job008`) or repeated (`?session=job007&session=job008`). Without the
+parameter nothing changes: the project list, navigation and the gallery are the same either way.
+
 ## Development
 
 We offer dev containers for ease of use or manual dev setups.
