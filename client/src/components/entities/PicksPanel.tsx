@@ -33,6 +33,7 @@ import {
   usePickPoints,
   useCreatePicks,
   useDeletePicks,
+  useCanEdit,
 } from "@/api/hooks";
 import { useCopick } from "@/contexts/CopickContext";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
@@ -84,6 +85,8 @@ export function PicksPanel({
   const isEditing = isEditingPicks || isEditingFilaments;
   const createPicks = useCreatePicks();
   const deletePicks = useDeletePicks();
+  // Read-only server: no new picks, and every set is shown like tool picks, without edit and delete.
+  const editable = useCanEdit();
 
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -165,11 +168,13 @@ export function PicksPanel({
     );
 
   const isToolPick = (pick: PicksSummaryResponse) => pick.session_id === "0";
+  const canChange = (pick: PicksSummaryResponse) =>
+    editable && !isToolPick(pick);
   // Width of the actions column: palette (sets with instance IDs) + edit and delete (user sets).
   const actionColumns = Math.max(
     1,
     ...(picks ?? []).map(
-      (p) => ((p.instance_count ?? 0) > 0 ? 1 : 0) + (isToolPick(p) ? 0 : 2),
+      (p) => ((p.instance_count ?? 0) > 0 ? 1 : 0) + (canChange(p) ? 2 : 0),
     ),
   );
 
@@ -180,24 +185,26 @@ export function PicksPanel({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Toolbar */}
+      {/* Toolbar (nothing in it on a read-only server without picks) */}
       <Box
         sx={{
           p: 1,
-          display: "flex",
+          display: editable || picks?.length ? "flex" : "none",
           gap: 1,
           borderBottom: 1,
           borderColor: "divider",
         }}
       >
-        <Button
-          startIcon={<AddIcon />}
-          size="small"
-          onClick={() => setDialogOpen(true)}
-          disabled={isEditing}
-        >
-          New
-        </Button>
+        {editable && (
+          <Button
+            startIcon={<AddIcon />}
+            size="small"
+            onClick={() => setDialogOpen(true)}
+            disabled={isEditing}
+          >
+            New
+          </Button>
+        )}
         {!!picks?.length && (
           <TableSearch
             value={search}
@@ -258,6 +265,7 @@ export function PicksPanel({
                   runName={runName}
                   isVisible={isVisible(pick)}
                   isToolPick={isToolPick(pick)}
+                  canChange={canChange(pick)}
                   isCurrentlyEditing={isCurrentlyEditing(pick)}
                   isAnyEditing={isEditing}
                   onToggle={() => handleToggle(pick)}
@@ -290,12 +298,14 @@ export function PicksPanel({
       )}
 
       {/* New Pick Dialog */}
-      <NewPickDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        onSubmit={handleCreatePicks}
-        runName={runName}
-      />
+      {editable && (
+        <NewPickDialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          onSubmit={handleCreatePicks}
+          runName={runName}
+        />
+      )}
     </Box>
   );
 }
@@ -306,6 +316,8 @@ interface PickRowProps {
   runName: string;
   isVisible: boolean;
   isToolPick: boolean;
+  /** Offer edit and delete: a user set on a writable server. */
+  canChange: boolean;
   isCurrentlyEditing: boolean;
   isAnyEditing: boolean;
   onToggle: () => void;
@@ -319,6 +331,7 @@ function PickRow({
   runName,
   isVisible,
   isToolPick,
+  canChange,
   isCurrentlyEditing,
   isAnyEditing,
   onToggle,
@@ -436,7 +449,7 @@ function PickRow({
               </IconButton>
             </Tooltip>
           )}
-          {!isToolPick && (
+          {canChange && (
             <>
               <Tooltip
                 title={

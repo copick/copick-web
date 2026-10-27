@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
-from ..dependencies import get_copick_service, get_project_meta
+from ..dependencies import WRITES, get_copick_service, get_project_meta
 from ..models import (
     CreatePicksRequest,
     CreatePicksResponse,
@@ -202,7 +202,7 @@ def get_pick_points(
 # --- Picks mutation endpoints ---
 
 
-@router.post("/runs/{run_name}/picks", response_model=CreatePicksResponse, status_code=201)
+@router.post("/runs/{run_name}/picks", response_model=CreatePicksResponse, status_code=201, dependencies=WRITES)
 def create_picks(
     run_name: str,
     request: CreatePicksRequest,
@@ -238,7 +238,11 @@ def create_picks(
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.put("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", response_model=PicksDetailResponse)
+@router.put(
+    "/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}",
+    response_model=PicksDetailResponse,
+    dependencies=WRITES,
+)
 def update_picks(
     run_name: str,
     object_name: str,
@@ -275,7 +279,7 @@ def update_picks(
         raise HTTPException(status_code=status, detail=str(e)) from e
 
 
-@router.delete("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", status_code=204)
+@router.delete("/runs/{run_name}/picks/{object_name}/{user_id}/{session_id}", status_code=204, dependencies=WRITES)
 def delete_picks(
     run_name: str,
     object_name: str,

@@ -11,6 +11,7 @@ import { NavigationProvider } from "@/contexts/NavigationContext";
 import { ViewerBridgeProvider } from "@/contexts/ViewerBridgeProvider";
 import { LayerStatusProvider } from "@/contexts/LayerStatusContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { SessionFocus } from "@/components/navigation/SessionFocus";
 
 export function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -26,6 +27,7 @@ export function ProjectPage() {
           <NavigationProvider>
             <ViewerBridgeProvider>
               <LayerStatusProvider>
+                <SessionFocus />
                 <AppLayout />
               </LayerStatusProvider>
             </ViewerBridgeProvider>

@@ -7,12 +7,16 @@
 import { useEffect, useState } from "react";
 import { Box, IconButton, Popover, Tooltip, Typography } from "@mui/material";
 import { KeyboardOutlined } from "@mui/icons-material";
+import { useCanEdit } from "@/api/hooks";
+import { withoutEditing } from "@/utils/readOnly";
 
 type Binding = [keys: string[], action: string];
 
 interface Group {
   title: string;
   bindings: Binding[];
+  /** Bindings of the editing tools, left out on a read-only server. */
+  editing?: boolean;
 }
 
 const IS_MAC =
@@ -44,6 +48,7 @@ export const SHORTCUT_GROUPS: Group[] = [
   },
   {
     title: "Editing picks",
+    editing: true,
     bindings: [
       [["Click"], "Add a point (Add tool)"],
       [["Click"], "Select a point (Select tool)"],
@@ -53,6 +58,7 @@ export const SHORTCUT_GROUPS: Group[] = [
   },
   {
     title: "Editing filaments",
+    editing: true,
     bindings: [
       [["Click"], "Add a control point (Trace tool)"],
       [["Drag a handle"], "Move a control point"],
@@ -106,6 +112,7 @@ export function ShortcutsHelp() {
   // The anchor is kept in state (a callback ref) because the panel reads it while rendering.
   const [button, setButton] = useState<HTMLButtonElement | null>(null);
   const [open, setOpen] = useState(false);
+  const groups = withoutEditing(SHORTCUT_GROUPS, useCanEdit());
 
   // "?" toggles the panel, except while typing.
   useEffect(() => {
@@ -155,7 +162,7 @@ export function ShortcutsHelp() {
             rowGap: 1.5,
           }}
         >
-          {SHORTCUT_GROUPS.map((group) => (
+          {groups.map((group) => (
             <Box key={group.title}>
               <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
                 {group.title}

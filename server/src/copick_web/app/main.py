@@ -1,9 +1,25 @@
-"""FastAPI application entry point."""
+"""FastAPI application: ``create_app`` builds one, and ``app`` is the one built from the settings.
+
+Embedding copick-web in another FastAPI application (same origin, under a prefix of the host's choosing)::
+
+    copick_app = create_app(read_only=True, allow_empty=True)
+    host.mount("/copick-web", copick_app)
+    pid = copick_app.state.registry.register_local("/abs/path/copick_config.json")
+
+    # Starlette does not run a mounted app's lifespan: run it from the host's own.
+    async with copick_app.router.lifespan_context(copick_app):
+        ...
+
+The UI is then at ``/copick-web/`` and a project at ``/copick-web/projects/<pid>/``.
+"""
 
 import asyncio
 import logging
+from collections.abc import Iterable
 from contextlib import asynccontextmanager
+from os import PathLike
 from pathlib import Path
+from typing import Optional, Union
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +31,10 @@ from .routes import config, filaments, meshes, projects, runs, zarr_proxy
 from .services.project_registry import ProjectRegistry, set_project_registry
 from .services.registry_client import RegistryClient
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+#: The built client (``npm run build:server`` in client/), served by every app created while it is there.
+static_dir = Path(__file__).parent.parent / "static"
 
 
 async def _refresh_loop(registry: ProjectRegistry, interval: int):
@@ -29,57 +47,6 @@ async def _refresh_loop(registry: ProjectRegistry, interval: int):
             raise
         except Exception as e:
             logger.exception("Registry refresh loop error: %s", e)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan handler."""
-    # Build registry
-    if not settings.copick_config_paths and not settings.registry_url:
-        raise RuntimeError(
-            "No project source configured. Provide local config paths via the CLI / "
-            "COPICK_CONFIG_PATHS, or set REGISTRY_URL."
-        )
-
-    client = RegistryClient(settings.registry_url) if settings.registry_url else None
-    registry = ProjectRegistry(registry_client=client, service_cache_size=settings.service_cache_size)
-
-    for path in settings.copick_config_paths:
-        try:
-            pid = registry.register_local(path)
-            logger.info(
-                "Registered local project '%s' (%s) from %s",
-                pid,
-                registry.get_metadata(pid).name or "unnamed",
-                path,
-            )
-        except FileNotFoundError as e:
-            logger.error("Local config not found, skipping: %s (%s)", path, e)
-
-    if client is not None:
-        try:
-            await registry.refresh_registry()
-        except Exception as e:
-            logger.warning("Initial registry refresh failed; continuing without registry projects: %s", e)
-
-    set_project_registry(registry)
-
-    tasks = [asyncio.create_task(_sweep_caches(registry, settings.cache_sweep_seconds))]
-    if client is not None:
-        tasks.append(asyncio.create_task(_refresh_loop(registry, settings.registry_refresh_seconds)))
-
-    logger.info("copick-web ready: %d project(s) listed.", len(registry.list_projects()))
-
-    try:
-        yield
-    finally:
-        for task in tasks:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        logger.info("Shutting down copick-web server")
 
 
 async def _sweep_caches(registry: ProjectRegistry, every: float) -> None:
@@ -95,17 +62,26 @@ async def _sweep_caches(registry: ProjectRegistry, every: float) -> None:
             logger.warning(f"Cache sweep failed: {e}")
 
 
-app = FastAPI(
-    title="Copick Web Server",
-    description="API server for copick web visualization",
-    version="0.1.0",
-    lifespan=lifespan,
-    # A prefix the proxy forwards (e.g. /node/<host>/<port>); requests with or without it are routed alike.
-    root_path=settings.base_path.rstrip("/"),
-)
+def _register_configs(registry: ProjectRegistry, configs: Iterable[str]) -> None:
+    for path in configs:
+        try:
+            pid = registry.register_local(path)
+            logger.info(
+                "Registered local project '%s' (%s) from %s",
+                pid,
+                registry.get_metadata(pid).name or "unnamed",
+                path,
+            )
+        except FileNotFoundError as e:
+            logger.error("Local config not found, skipping: %s (%s)", path, e)
 
 
-@app.middleware("http")
+def _normalize_base_path(base_path: str) -> str:
+    """``/a/b`` for ``a/b``, ``/a/b/`` or ``/a/b``; empty for no prefix."""
+    stripped = base_path.strip("/")
+    return f"/{stripped}" if stripped else ""
+
+
 async def redirect_root_relatively(request: Request, call_next):
     """Add the trailing slash to the app root under a forwarded prefix (``/node/<host>/<port>``) with a relative
     redirect: Starlette's own is absolute and names the Host it was sent, which may be the backend behind the proxy."""
@@ -116,46 +92,31 @@ async def redirect_root_relatively(request: Request, call_next):
     return await call_next(request)
 
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(projects.router)
-app.include_router(config.router)
-app.include_router(runs.router)
-app.include_router(filaments.router)
-app.include_router(meshes.router)
-app.include_router(zarr_proxy.router)
-
-
-@app.get("/health")
 async def health_check():
     """Liveness check. Async so a saturated threadpool can't make the server look dead."""
     return {"status": "healthy"}
 
 
-# Serve the built SPA. Order matters: SPA catch-all must come BEFORE the
-# StaticFiles mount at "/" so it can intercept deep-link refreshes
-# (e.g. /projects/abc) and return index.html instead of 404.
-static_dir = Path(__file__).parent.parent / "static"
+def _serve_client(app: FastAPI) -> None:
+    """Serve the built client, if there is one: ``index.html`` for the client routes under ``/projects`` and the files
+    at ``/``.
 
-
-def _has_static_files() -> bool:
+    Order matters: the SPA catch-all must come BEFORE the StaticFiles mount at "/" so it can intercept deep-link
+    refreshes (e.g. /projects/abc) and return index.html instead of 404.
+    """
     if not static_dir.exists():
-        return False
-    return any(f.name != ".gitkeep" for f in static_dir.iterdir())
+        return
+    if not any(f.name != ".gitkeep" for f in static_dir.iterdir()):
+        logger.warning(
+            f"Static directory exists but is empty: {static_dir}. "
+            "Run 'npm run build:server' in the client directory to build the client."
+        )
+        return
 
-
-if _has_static_files():
     index_file = static_dir / "index.html"
 
     @app.get("/projects/{full_path:path}", include_in_schema=False)
-    def spa_projects(full_path: str, request: Request):
+    def spa_projects(full_path: str):
         """Serve the SPA index.html for client-side routes under /projects."""
         if not index_file.exists():
             raise HTTPException(status_code=404, detail="SPA index.html missing")
@@ -163,16 +124,122 @@ if _has_static_files():
 
     logger.info(f"Serving static files from: {static_dir}")
     app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-elif static_dir.exists():
-    logger.warning(
-        f"Static directory exists but is empty: {static_dir}. "
-        "Run 'npm run build:server' in the client directory to build the client."
+
+
+def create_app(
+    configs: Iterable[Union[str, PathLike]] = (),
+    base_path: str = "",
+    read_only: bool = False,
+    registry_url: Optional[str] = None,
+    allow_empty: bool = False,
+) -> FastAPI:
+    """Build a copick-web application. Every call builds a new, independent app.
+
+    Args:
+        configs: Local copick config files, registered when the app starts (in its lifespan).
+        base_path: URL prefix of a reverse proxy that forwards it to the server (``/node/<host>/<port>``); requests
+            with or without it are served alike. Leave it empty when mounting the app into another application: the
+            mount supplies its own prefix.
+        read_only: Refuse every change to project data (picks, filaments, object types) with 403; reloading a
+            project stays allowed. The client learns it from the project config (``read_only``) and hides its
+            editing tools.
+        registry_url: Base URL of a project registry API (e.g. ``http://localhost:8000/copick/v1``).
+        allow_empty: Start without any project source (no ``configs``, no ``registry_url``), for an application that
+            registers projects later. Otherwise starting such an app fails.
+
+    The ``ProjectRegistry`` is created here and kept on ``app.state.registry``: ``register_local`` works before and
+    after the app has started, and the routes work even if the lifespan never runs. The lifespan registers
+    ``configs``, lists the registry and runs the background cache sweep and registry refresh. Starlette does not run
+    a mounted app's lifespan, so an application that mounts this one runs ``app.router.lifespan_context(app)`` from
+    its own.
+
+    Other settings (cache sizes, CORS origins, SSH access of registry projects, ...) come from the environment and
+    ``.env``, as ``Settings``.
+    """
+    configs = tuple(str(c) for c in configs)
+    client = RegistryClient(registry_url) if registry_url else None
+    registry = ProjectRegistry(registry_client=client, service_cache_size=settings.service_cache_size)
+    # The routes read the registry from their app's state; the module-level one is only their fallback.
+    set_project_registry(registry)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Register the local configs, list the registry, and run the background tasks while the app is up."""
+        if not configs and client is None and not allow_empty:
+            raise RuntimeError(
+                "No project source configured. Provide local config paths via the CLI / "
+                "COPICK_CONFIG_PATHS, or set REGISTRY_URL."
+            )
+        _register_configs(registry, configs)
+
+        if client is not None:
+            try:
+                await registry.refresh_registry()
+            except Exception as e:
+                logger.warning("Initial registry refresh failed; continuing without registry projects: %s", e)
+
+        tasks = [asyncio.create_task(_sweep_caches(registry, settings.cache_sweep_seconds))]
+        if client is not None:
+            tasks.append(asyncio.create_task(_refresh_loop(registry, settings.registry_refresh_seconds)))
+
+        logger.info(
+            "copick-web ready: %d project(s) listed%s.",
+            len(registry.list_projects()),
+            ", read-only" if read_only else "",
+        )
+
+        try:
+            yield
+        finally:
+            for task in tasks:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            logger.info("Shutting down copick-web server")
+
+    app = FastAPI(
+        title="Copick Web Server",
+        description="API server for copick web visualization",
+        version="0.1.0",
+        lifespan=lifespan,
+        # A prefix the proxy forwards (e.g. /node/<host>/<port>); requests with or without it are routed alike.
+        root_path=_normalize_base_path(base_path),
     )
+    app.state.registry = registry
+    app.state.read_only = read_only
+
+    app.middleware("http")(redirect_root_relatively)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    for module in (projects, config, runs, filaments, meshes, zarr_proxy):
+        app.include_router(module.router)
+    app.get("/health")(health_check)
+
+    _serve_client(app)
+    return app
+
+
+# The app ``uvicorn copick_web.app.main:app`` serves, from the settings (environment and ``.env``).
+app = create_app(
+    configs=settings.copick_config_paths,
+    base_path=settings.base_path,
+    read_only=settings.read_only,
+    registry_url=settings.registry_url,
+)
 
 
 if __name__ == "__main__":
     import uvicorn
 
+    logging.basicConfig(level=logging.DEBUG)
     uvicorn.run(
         "copick_web.app.main:app",
         host=settings.host,

@@ -31,7 +31,7 @@ import {
   Visibility,
   VisibilityOff,
 } from "@mui/icons-material";
-import { useFilamentDetail, useFilaments } from "@/api/hooks";
+import { useCanEdit, useFilamentDetail, useFilaments } from "@/api/hooks";
 import type { FilamentsSummaryResponse } from "@/api/types";
 import { rowDoubleClick, toggleRowSx } from "@/utils/rowToggle";
 import { EntityNameCell } from "./EntityNameCell";
@@ -87,37 +87,50 @@ export function FilamentsTable({
   const filamentEditing = useFilamentEditing();
   const picking = usePicking();
   const startEditing = useStartFilamentEditing();
+  // Read-only server: no tracing, editing or deleting.
+  const editable = useCanEdit();
   const busy = filamentEditing.isEditing || picking.isEditing;
   const editedKey = filamentEditing.editing
     ? filamentsKey(filamentEditing.editing)
     : null;
 
   const header = (
-    <Box sx={{ px: 1, py: 0.5, display: "flex", alignItems: "center" }}>
-      <Tooltip
-        title={
-          busy
-            ? "Finish the current edit first"
-            : "Trace a new set of filaments"
-        }
-      >
-        <span>
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => setNewOpen(true)}
-            disabled={busy}
+    <Box
+      sx={{
+        px: 1,
+        py: 0.5,
+        display: editable || sets?.length ? "flex" : "none",
+        alignItems: "center",
+      }}
+    >
+      {editable && (
+        <>
+          <Tooltip
+            title={
+              busy
+                ? "Finish the current edit first"
+                : "Trace a new set of filaments"
+            }
           >
-            New
-          </Button>
-        </span>
-      </Tooltip>
-      <NewFilamentsDialog
-        open={newOpen}
-        runName={runName}
-        onClose={() => setNewOpen(false)}
-        onCreate={(set) => startEditing(set, true)}
-      />
+            <span>
+              <Button
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={() => setNewOpen(true)}
+                disabled={busy}
+              >
+                New
+              </Button>
+            </span>
+          </Tooltip>
+          <NewFilamentsDialog
+            open={newOpen}
+            runName={runName}
+            onClose={() => setNewOpen(false)}
+            onCreate={(set) => startEditing(set, true)}
+          />
+        </>
+      )}
       {!!sets?.length && (
         <Box sx={{ ml: 1, flexGrow: 1, display: "flex", minWidth: 0 }}>
           <TableSearch
@@ -201,7 +214,10 @@ export function FilamentsTable({
                 >
                   Count
                 </TableCell>
-                <TableCell padding="none" sx={{ width: COL.icon * 2 }} />
+                <TableCell
+                  padding="none"
+                  sx={{ width: COL.icon * (editable ? 2 : 1) }}
+                />
               </TableRow>
             </TableHead>
             <TableBody>
@@ -263,29 +279,31 @@ export function FilamentsTable({
                         <Box
                           sx={{ display: "flex", justifyContent: "flex-end" }}
                         >
-                          <Tooltip
-                            title={
-                              busy
-                                ? "Finish the current edit first"
-                                : f.session_id === "0"
-                                  ? "Edit (tool output: saved under your own session)"
-                                  : "Edit filaments"
-                            }
-                          >
-                            <span>
-                              <IconButton
-                                size="small"
-                                aria-label={`Edit filaments ${f.object_name} ${f.user_id} ${f.session_id}`}
-                                disabled={busy}
-                                color={
-                                  key === editedKey ? "primary" : "default"
-                                }
-                                onClick={() => startEditing(identity(f))}
-                              >
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
+                          {editable && (
+                            <Tooltip
+                              title={
+                                busy
+                                  ? "Finish the current edit first"
+                                  : f.session_id === "0"
+                                    ? "Edit (tool output: saved under your own session)"
+                                    : "Edit filaments"
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  aria-label={`Edit filaments ${f.object_name} ${f.user_id} ${f.session_id}`}
+                                  disabled={busy}
+                                  color={
+                                    key === editedKey ? "primary" : "default"
+                                  }
+                                  onClick={() => startEditing(identity(f))}
+                                >
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
                           <IconButton
                             size="small"
                             onClick={() => setExpanded(isExpanded ? null : key)}

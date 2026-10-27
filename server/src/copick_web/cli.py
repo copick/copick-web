@@ -1,6 +1,7 @@
 """CLI entry point for copick-web."""
 
 import json
+import logging
 import threading
 import webbrowser
 from pathlib import Path
@@ -33,6 +34,12 @@ import uvicorn
     help="URL prefix of a reverse proxy that forwards the full path, e.g. Open OnDemand's /node/<host>/<port>. "
     "Not needed when the proxy strips the prefix (/rnode/<host>/<port>): the client works under any prefix.",
 )
+@click.option(
+    "--read-only",
+    is_flag=True,
+    envvar="READ_ONLY",
+    help="Refuse every change to project data (picks, filaments, object types); the UI hides its editing tools.",
+)
 def main(
     configs: tuple[str, ...],
     config_dir: str | None,
@@ -41,6 +48,7 @@ def main(
     port: int,
     no_browser: bool,
     base_path: str,
+    read_only: bool,
 ):
     """Start Copick Web server.
 
@@ -55,7 +63,10 @@ def main(
         copick-web --config-dir ./configs --registry-url http://localhost:8000/copick/v1
         copick-web --registry-url http://localhost:8000/copick/v1
         copick-web config.json --port 9000 --base-path /node/$(hostname)/9000
+        copick-web config.json --read-only
     """
+    logging.basicConfig(level=logging.DEBUG)
+
     # Collect local config paths.
     local_paths: list[str] = [str(Path(c).resolve()) for c in configs]
     if config_dir:
@@ -82,6 +93,8 @@ def main(
         click.echo(f"Local configs: {', '.join(local_paths)}")
     if registry_url:
         click.echo(f"Registry URL: {registry_url}")
+    if read_only:
+        click.echo("Read-only: projects can be viewed but not changed")
 
     if not no_browser:
 
@@ -90,9 +103,10 @@ def main(
 
         threading.Timer(1.5, open_browser).start()
 
-    # Import app here so the env vars set above are picked up by Settings().
-    from copick_web.app.main import app
+    # Imported here so the env vars set above are picked up by Settings() (cache sizes, CORS, ...).
+    from copick_web.app.main import create_app
 
+    app = create_app(configs=local_paths, base_path=base_path, read_only=read_only, registry_url=registry_url)
     uvicorn.run(app, host=host, port=port)
 
 
