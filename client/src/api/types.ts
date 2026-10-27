@@ -35,6 +35,8 @@ export interface ConfigResponse {
   user_id: string | null;
   session_id: string | null;
   features?: FeaturesResponse;
+  /** The server refuses changes to project data; the client hides its editing tools (see utils/readOnly). */
+  read_only?: boolean;
 }
 
 export type Rgba = [number, number, number, number];
