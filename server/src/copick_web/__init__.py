@@ -1,3 +1,3 @@
 """Copick Web - Web visualization for copick datasets."""
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
