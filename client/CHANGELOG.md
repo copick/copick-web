@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.4](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.3...client-v1.0.0-alpha.4) (2026-10-27)
+
+
+### Features
+
+* embeddable read-only app factory, and ?session= to show one session's layers ([#102](https://github.com/copick/copick-web/issues/102)) ([82e71cd](https://github.com/copick/copick-web/commit/82e71cdd6b4984d79d6190f70b0ecd705d2757c1))
+
 ## [1.0.0-alpha.3](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.2...client-v1.0.0-alpha.3) (2026-10-26)
 
 
