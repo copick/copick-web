@@ -179,8 +179,9 @@ function toMesh(
     const filter = vtkWindowedSincPolyDataFilter.newInstance({
       numberOfIterations: SMOOTHING_ITERATIONS,
       passBand: SMOOTHING_PASS_BAND,
-      normalizeCoordinates: true,
-      nonManifoldSmoothing: true,
+      // On/off flags typed as numbers, like VTK's.
+      normalizeCoordinates: 1,
+      nonManifoldSmoothing: 1,
     });
     filter.setInputData(surface);
     surface = filter.getOutputData();

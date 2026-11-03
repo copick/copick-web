@@ -10,8 +10,8 @@ created OME-Zarr 0.5 / Zarr v3 datasets in the same application build.
 - Client development and CI: Node.js 24.
 - Core: `copick>=2.0.0a3,<2.1`.
 - Store API: `zarr>=3.1.6,<4` asynchronous `Store` contract.
-- Browser reader: the locked `@idetik/core` 0.51 / Zarrita 0.7 line (idetik's OME-Zarr reader is unchanged
-  since 0.35, and Zarrita still resolves to 0.7.3).
+- Browser reader: the locked `@idetik/core` 0.52 / Zarrita 0.7 line (idetik's OME-Zarr reader is unchanged
+  since 0.35, except that 0.52 also reads float16 arrays, and Zarrita still resolves to 0.7.3).
 
 Behavioral fixtures cover legacy unsharded integer arrays and canonical
 copick-produced sharded integer and shuffled floating-point arrays. The client
