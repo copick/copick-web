@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.5](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha.4...server-v1.0.0-alpha.5) (2026-11-03)
+
+
+### Bug Fixes
+
+* **deps:** consolidate Dependabot updates; idetik 0.52, vtk.js 38 (Zarr v3) ([#126](https://github.com/copick/copick-web/issues/126)) ([fe576fa](https://github.com/copick/copick-web/commit/fe576fa2cb77a533e55fa80e5960e9e4dd472a0d))
+
 ## [1.0.0-alpha.4](https://github.com/copick/copick-web/compare/server-v1.0.0-alpha.3...server-v1.0.0-alpha.4) (2026-10-27)
 
 
