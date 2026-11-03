@@ -3,15 +3,16 @@ import type { ChunkLike, ChunkLoaderLike } from "@/idetik/ChannelViewSource";
 import { readLabelVolume } from "./readLabelVolume";
 
 type Dims = ReturnType<ChunkLoaderLike["getSourceDimensionMap"]>;
+type ChunkArray = new (n: number) => NonNullable<ChunkLike["data"]>;
 
 /**
  * A loader over in-memory levels (x fastest), cutting chunks to the requested shape the way idetik's OME-Zarr
- * loader does. Levels halve in size; each has the given chunk size.
+ * loader does. Levels halve in size; each has the given chunk size. Chunks come as `type` (the store's dtype).
  */
 function fakeLoader(
   levels: { size: [number, number, number]; data: Uint16Array }[],
   chunkSize: number,
-  { scale = 10, translation = 5 } = {},
+  { scale = 10, translation = 5, type = Uint16Array as ChunkArray } = {},
 ): ChunkLoaderLike & { requests: number } {
   const axis = (a: number, name: string) => ({
     name,
@@ -39,7 +40,7 @@ function fakeLoader(
       loader.requests++;
       const { size, data } = levels[chunk.lod];
       const { x: sx, y: sy, z: sz } = chunk.shape;
-      const out = new Uint16Array(sx * sy * sz);
+      const out = new type(sx * sy * sz);
       let i = 0;
       for (let z = 0; z < sz; z++)
         for (let y = 0; y < sy; y++)
@@ -109,6 +110,26 @@ describe("readLabelVolume", () => {
     expect(planes).toEqual([0, 0, 3, 0]);
     expect(v.origin).toEqual([10, 10, 10]);
     expect(v.spacing).toEqual([20, 20, 20]);
+  });
+
+  test("keeps a float16 store's array type, coarsened or not", async () => {
+    // idetik's loader returns Float16Array chunks for float16 stores since 0.52.
+    const fine = level([8, 8, 8], (_x, _y, z) => (z === 5 ? 3 : 0));
+    const read = (maxVoxels: number) =>
+      readLabelVolume(
+        [fakeLoader([fine], 3, { type: Float16Array })],
+        signal(),
+        maxVoxels,
+      );
+    const full = await read(1000);
+    expect(full.channels[0]).toBeInstanceOf(Float16Array);
+    expect([...full.channels[0]]).toEqual([...fine.data]);
+    const coarse = await read(100);
+    expect(coarse.factor).toBe(2);
+    expect(coarse.channels[0]).toBeInstanceOf(Float16Array);
+    expect([0, 1, 2, 3].map((z) => coarse.channels[0][z * 16])).toEqual([
+      0, 0, 3, 0,
+    ]);
   });
 
   test("reads the channels of a panoptic segmentation together", async () => {

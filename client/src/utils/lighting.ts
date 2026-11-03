@@ -17,7 +17,7 @@ const AMBIENT = 0.45;
 const KEY = 0.5;
 const FILL = 0.35;
 
-/** The direction of idetik's mesh light (`mesh_frag.glsl`, 0.51): recheck on every upgrade. */
+/** The direction of idetik's mesh light (`mesh_frag.glsl`, 0.52): recheck on every upgrade. */
 export const IDETIK_LIGHT = normalize([0, -1, 1]);
 
 function normalize(v: number[]): Vec3 {
