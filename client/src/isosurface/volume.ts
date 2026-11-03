@@ -3,6 +3,7 @@
  * Free of vtk.js, so the main bundle can use it.
  */
 
+/** Every array type idetik's chunk loader returns (float16 since 0.52). */
 export type LabelArray =
   | Uint8Array
   | Uint16Array
@@ -10,6 +11,7 @@ export type LabelArray =
   | Int8Array
   | Int16Array
   | Int32Array
+  | Float16Array
   | Float32Array;
 export type XYZ = [number, number, number];
 
