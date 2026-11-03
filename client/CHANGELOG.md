@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/copick/copick-web/compare/client-v0.1.7...client-v0.1.8) (2026-11-03)
+
+
+### Bug Fixes
+
+* **deps:** consolidate Dependabot updates; idetik 0.52, vtk.js 38 ([#125](https://github.com/copick/copick-web/issues/125)) ([3f15f91](https://github.com/copick/copick-web/commit/3f15f918be60698097bca9d2979a51416b1a34fe))
+
 ## [0.1.7](https://github.com/copick/copick-web/compare/client-v0.1.6...client-v0.1.7) (2026-10-27)
 
 
