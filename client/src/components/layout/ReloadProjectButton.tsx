@@ -40,7 +40,7 @@ export function ReloadProjectButton() {
         title={
           reload.isPending
             ? "Reloading…"
-            : "Reload project: show runs, tomograms and annotations added since it was opened"
+            : "Reload project and refresh segmentation pixels written by other tools"
         }
       >
         <span>

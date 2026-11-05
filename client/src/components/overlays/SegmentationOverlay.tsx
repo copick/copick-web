@@ -25,8 +25,10 @@ import {
   useObjects,
   useSegmentationMeshes,
   useSurfacePoints,
+  useProjectRevision,
 } from "@/api/hooks";
 import { appUrl } from "@/api/client";
+import { segmentationSourceUrl } from "@/api/projectRevision";
 import {
   segmentationTypeOf,
   type PickableObjectResponse,
@@ -174,9 +176,10 @@ function SegmentationLayers({
   const { updateSegmentation } = useCopick();
   const { setStatus } = useLayerStatus();
   const type = selection.segmentationType;
-  const url = appUrl(seg.zarr_url);
+  const revision = useProjectRevision();
+  const url = segmentationSourceUrl(appUrl(seg.zarr_url), revision);
   // A source opened for another segmentation (key, type or URL) is not shown while this one opens.
-  const sourceKey = `${segKey}|${type}|${url}`;
+  const sourceKey = `${segKey}|${type}|${url}|${revision}`;
   const [openedFor, setOpened] = useState<
     (OpenedSource & { key: string }) | null
   >(null);

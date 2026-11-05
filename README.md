@@ -383,3 +383,11 @@ copick-web/
 ## License
 
 MIT
+
+### CellCanvas integration
+
+See [the CellCanvas web port map](docs/cellcanvas-web-port.md) for existing viewer features,
+learning-service boundaries, and remaining painting/training integration. **Reload project**
+also refreshes segmentation pixels and derived surfaces written by another tool; it preserves
+navigation and display selection. Refresh only after the writer has completed its output.
+External data hosts must use revalidation or immutable release URLs.
