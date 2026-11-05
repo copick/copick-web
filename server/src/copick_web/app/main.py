@@ -27,7 +27,8 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import settings
-from .routes import config, filaments, meshes, projects, runs, zarr_proxy
+from .routes import cellcanvas, config, filaments, meshes, projects, runs, zarr_proxy
+from .services.cellcanvas import load_bindings
 from .services.project_registry import ProjectRegistry, set_project_registry
 from .services.registry_client import RegistryClient
 
@@ -132,6 +133,7 @@ def create_app(
     read_only: bool = False,
     registry_url: Optional[str] = None,
     allow_empty: bool = False,
+    cellcanvas_bindings: Optional[Union[str, PathLike]] = None,
 ) -> FastAPI:
     """Build a copick-web application. Every call builds a new, independent app.
 
@@ -144,6 +146,8 @@ def create_app(
             project stays allowed. The client learns it from the project config (``read_only``) and hides its
             editing tools.
         registry_url: Base URL of a project registry API (e.g. ``http://localhost:8000/copick/v1``).
+        cellcanvas_bindings: CellCanvas binding file (see ``services.cellcanvas``); the learning panel lists none
+            without it.
         allow_empty: Start without any project source (no ``configs``, no ``registry_url``), for an application that
             registers projects later. Otherwise starting such an app fails.
 
@@ -209,6 +213,7 @@ def create_app(
     )
     app.state.registry = registry
     app.state.read_only = read_only
+    app.state.cellcanvas_bindings = load_bindings(cellcanvas_bindings) if cellcanvas_bindings else []
 
     app.middleware("http")(redirect_root_relatively)
     app.add_middleware(
@@ -219,7 +224,7 @@ def create_app(
         allow_headers=["*"],
     )
 
-    for module in (projects, config, runs, filaments, meshes, zarr_proxy):
+    for module in (projects, config, runs, filaments, meshes, zarr_proxy, cellcanvas):
         app.include_router(module.router)
     app.get("/health")(health_check)
 
@@ -233,6 +238,7 @@ app = create_app(
     base_path=settings.base_path,
     read_only=settings.read_only,
     registry_url=settings.registry_url,
+    cellcanvas_bindings=settings.cellcanvas_bindings,
 )
 
 

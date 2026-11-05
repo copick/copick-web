@@ -261,6 +261,11 @@ class ProjectRegistry:
 
     # --- Local registration ---
 
+    def local_config_path(self, pid: str) -> Optional[str]:
+        """The config file of a local project, or None for registry or unknown projects."""
+        local = self._local_projects.get(pid)
+        return local.config_path if local else None
+
     def register_local(self, path: str) -> str:
         """Register a local config file. Returns the assigned project id.
 

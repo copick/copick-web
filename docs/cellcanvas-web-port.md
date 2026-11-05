@@ -47,10 +47,31 @@ Image sources and camera/selection state are retained. The same refresh function
 
 External registry URLs are not modified: they may be signed. Their hosts must require revalidation or publish a new immutable URL when content changes. This increment guarantees fresh HTTP keys for copick-web's own segmentation proxy, not arbitrary external caches.
 
-## Next coherent implementation
+## Learning slice: paint, train, predict, publish, refresh
 
-The first full learning slice should bind one copick reconstruction to a registered core dataset with saved public-model features, add semantic painting and a CellCanvas panel, then execute **paint → train → predict → publish → refresh**. Preserve the core service's operation ID on uncertain responses; a timeout must not become a new training submission. A service restart invalidates the old receipt and requires explicit reconciliation.
+A server-side binding file (`CELLCANVAS_BINDINGS`, or `create_app(cellcanvas_bindings=...)`) names, for one copick run, voxel spacing and reconstruction, a dataset of a loopback CellCanvas core service, its classes, the copick segmentations used for painting and predictions, and the feature provenance. The browser names a binding only by its ID; it cannot choose service URLs or paths. Bindings match a project by its ID or its local config file.
 
-Acceptance: browser and napari read back the same signed class annotations with unknown regions intact; the shared backend produces equivalent saved labels; a failed/interrupted prediction is never displayed as a completed release; the UI works under a BioNotate-style mount prefix. Public tests/examples require no private-model access. This is an engineering acceptance gate, not evidence of segmentation accuracy.
+- **Two environments, one HTTP contract.** copick-web (copick, Zarr 2) is the adapter; the core service (cellcanvas-core, Zarr 3) holds the image copy, features, its painting copy and its prediction store. `python -m cellcanvas_service.prepare` registers a copick tomogram with saved features, copying the image with its scale, origin and units and refusing feature manifests that do not declare a public model or that are not on the reconstruction grid.
+- **Geometry binding.** The panel's status compares the core dataset's painting, prediction and feature spatial shapes, voxel size, origin and units (converted to Å) with the copick reconstruction, and the client additionally compares the opened volume's grid. Painting, Train and Predict are disabled on any mismatch.
+- **Semantic painting.** Paint/Erase on any ortho pane paints discs of a chosen radius in that plane, interpolated along the drag. Each stroke is saved to a copick multilabel segmentation (`uint8`), with an optimistic revision check. Zero is unannotated; erase returns voxels to it; classes are the binding's positive IDs, and a background class is explicit. Painting written by another tool is accepted if its labels are bound classes.
+- **Train and Predict with receipts.** The client chooses an operation ID and remembers it; the server persists it beside the binding file before submitting. Training first copies the painting sparsely into the core with its revision, and the model records the revision it was trained on (the panel flags painting changed since training). A retry or page reload reconciles the same operation; a different operation is refused while one is pending; a core restart reports the receipt lost.
+- **Success-only publication.** The core serves a prediction only when its status is ready and its version is current. The adapter writes it to a staging directory and swaps it into the copick prediction segmentation, with metadata (operation, version, painting revision, features). A failed or interrupted prediction is not published, and the previous publication remains. The client refreshes label sources (the increment above) only for a new complete publication.
 
-The port map and refresh increment are delivered locally. Painting, dataset binding, public-model feature production and the full learning loop remain subsequent implementation work, not capabilities claimed by this patch.
+Run a local preview with a real core service:
+
+```bash
+cd server
+PYTHONPATH=src python scripts/cellcanvas_preview.py /tmp/cc-preview \
+  --core-python /path/to/cellcanvas/.venv/bin/python --serve   # add --check for the HTTP roundtrip
+```
+
+It builds the 32³ demo project and *synthetic* fixture features. For a real reconstruction with saved public-model features, add `--copick-config CONFIG --run RUN --voxel-size VS --tomo-type TYPE --features F --manifest M`. On a real volume, `--check` paints placement-only strokes (it tests storage and plumbing, not annotation) into the bound painting segmentation.
+
+### Limits
+
+- Fixture validation shows that the parts are connected correctly; it is not evidence of segmentation quality. No public-model features have been demonstrated yet: core needs per-voxel features on the reconstruction grid, so a patch model's (for example DINO) features must be resampled by their producer and the resampling recorded in the manifest.
+- Strokes appear after each save and refresh, with no optimistic local overlay. Brushes are 2D discs in one plane, and there is no undo.
+- Training reads the whole painting volume, and publication reads the whole prediction into memory. That is appropriate for one volume, not for large batches.
+- Publication needs a local copick overlay filesystem (atomic directory swap). Remote overlays are refused (501).
+- Core receipts are memory-only: a restart loses the model, and the panel asks the user to train again. The core is single-user and loopback-only. Hosted authentication and training eligibility remain host (BioNotate) concerns.
+- napari compatibility is checked by reading through a freshly opened copick root, which is napari-copick's read path. The napari GUI was not run.
