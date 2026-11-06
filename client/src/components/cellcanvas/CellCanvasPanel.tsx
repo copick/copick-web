@@ -97,6 +97,9 @@ function BindingPanel({
   } | null>(null);
   const [operation, setOperation] = useState<OperationState | undefined>();
   const [saving, setSaving] = useState(false);
+  const editing = useRef(false);
+  const drawing = useRef(false);
+  const [canUndo, setCanUndo] = useState(false);
   const revision = useRef<string | null>(null);
   const [paintRevision, setPaintRevision] = useState<string | null>(null);
   const shownPublication = useRef<string | null>(null);
@@ -156,6 +159,8 @@ function BindingPanel({
 
   useEffect(() => {
     if (!status.data) return;
+    if (editing.current) return;
+    setCanUndo(status.data.painting.can_undo);
     revision.current = status.data.painting.revision;
     setPaintRevision(revision.current);
     void adopt(status.data.operation, true);
@@ -210,7 +215,11 @@ function BindingPanel({
 
   const saveStroke = useCallback(
     async (stroke: Stroke) => {
+      if (editing.current) return;
+      editing.current = true;
       setSaving(true);
+      setMessage(null);
+      const strokeId = crypto.randomUUID();
       try {
         for (const chunk of chunkStroke(stroke)) {
           const saved = await cellcanvasApi.paint(
@@ -218,8 +227,10 @@ function BindingPanel({
             binding.id,
             revision.current,
             [chunk],
+            strokeId,
           );
           revision.current = saved.revision;
+          setCanUndo(saved.can_undo);
         }
         setPaintRevision(revision.current);
         await refreshProjectData(queryClient, projectId);
@@ -233,19 +244,80 @@ function BindingPanel({
               ? "The painting changed elsewhere; reloaded it. Repeat the last stroke."
               : error.message,
         });
+        editing.current = false;
         await status.refetch();
+        await refreshProjectData(queryClient, projectId);
       } finally {
+        editing.current = false;
         setSaving(false);
       }
     },
     [binding.id, binding.painting, projectId, queryClient, showRef, status],
   );
 
+  const undo = useCallback(async () => {
+    if (editing.current || drawing.current || !canUndo || operation?.pending)
+      return;
+    editing.current = true;
+    setSaving(true);
+    setMessage(null);
+    try {
+      const saved = await cellcanvasApi.undo(
+        projectId,
+        binding.id,
+        revision.current,
+      );
+      revision.current = saved.revision;
+      setPaintRevision(saved.revision);
+      setCanUndo(saved.can_undo);
+      await refreshProjectData(queryClient, projectId);
+      showRef.current(binding.painting);
+    } catch (e) {
+      setMessage({ severity: "error", text: (e as Error).message });
+      editing.current = false;
+      await status.refetch();
+      await refreshProjectData(queryClient, projectId);
+    } finally {
+      editing.current = false;
+      setSaving(false);
+    }
+  }, [
+    canUndo,
+    operation?.pending,
+    projectId,
+    binding.id,
+    binding.painting,
+    queryClient,
+    showRef,
+    status,
+  ]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest("input, textarea, select, [contenteditable=true]"))
+        return;
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "z" &&
+        geometryOk
+      ) {
+        event.preventDefault();
+        void undo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, geometryOk]);
+
   const strokeRef = useLatestRef({
     mode,
     label,
     radius,
     geometryOk,
+    busy: saving || !!operation?.pending,
     saveStroke,
   });
   const visibleKey = visible.map(Number).join("");
@@ -271,10 +343,18 @@ function BindingPanel({
       };
       const down = (event: PointerEvent) => {
         const s = strokeRef.current;
-        if (s.mode === "off" || !s.geometryOk || event.button !== 0) return;
+        if (
+          s.mode === "off" ||
+          !s.geometryOk ||
+          s.busy ||
+          editing.current ||
+          event.button !== 0
+        )
+          return;
         event.stopPropagation();
         event.preventDefault();
         element.setPointerCapture(event.pointerId);
+        drawing.current = true;
         stroke = {
           label: s.mode === "erase" ? 0 : s.label,
           radius: s.radius,
@@ -291,14 +371,22 @@ function BindingPanel({
       const up = (event: PointerEvent) => {
         if (!stroke) return;
         event.stopPropagation();
+        drawing.current = false;
         const done = stroke;
         stroke = null;
         void strokeRef.current.saveStroke(done);
       };
+      const cancel = () => {
+        stroke = null;
+        drawing.current = false;
+      };
+      element.addEventListener("pointercancel", cancel, true);
       element.addEventListener("pointerdown", down, true);
       element.addEventListener("pointermove", move, true);
       element.addEventListener("pointerup", up, true);
       disposers.push(() => {
+        cancel();
+        element.removeEventListener("pointercancel", cancel, true);
         element.removeEventListener("pointerdown", down, true);
         element.removeEventListener("pointermove", move, true);
         element.removeEventListener("pointerup", up, true);
@@ -399,6 +487,15 @@ function BindingPanel({
           aria-label="Brush radius (voxels)"
         />
       </Box>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={!geometryOk || busy || !canUndo}
+        title="Undo last saved stroke (Ctrl/Cmd+Z). Up to 20 strokes, including erase."
+        onClick={() => void undo()}
+      >
+        Undo
+      </Button>
       {saving && <Typography variant="caption">Saving…</Typography>}
       <Button
         size="small"

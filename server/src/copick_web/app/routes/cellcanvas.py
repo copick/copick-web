@@ -53,7 +53,12 @@ class Stroke(BaseModel):
 
 class PaintRequest(BaseModel):
     base_revision: Optional[str] = None
+    stroke_id: Optional[str] = Field(default=None, max_length=64)
     strokes: list[Stroke] = Field(min_length=1, max_length=64)
+
+
+class UndoRequest(BaseModel):
+    base_revision: Optional[str] = None
 
 
 class OperationRequest(BaseModel):
@@ -111,7 +116,19 @@ async def paint(
 ):
     """Save brush strokes into the copick painting segmentation (optimistic revision check)."""
     session = _session(binding_id, bindings, service, client_factory)
-    return await _call(session.paint, body.base_revision, [s.model_dump() for s in body.strokes])
+    return await _call(session.paint, body.base_revision, [s.model_dump() for s in body.strokes], body.stroke_id)
+
+
+@router.post("/bindings/{binding_id}/undo", dependencies=WRITES)
+async def undo(
+    binding_id: str,
+    body: UndoRequest,
+    bindings: list[Binding] = Depends(get_bindings),
+    service: CopickService = Depends(get_copick_service),
+    client_factory=Depends(get_client_factory),
+):
+    session = _session(binding_id, bindings, service, client_factory)
+    return await _call(session.undo, body.base_revision)
 
 
 @router.post("/bindings/{binding_id}/{kind}", dependencies=WRITES)

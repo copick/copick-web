@@ -210,9 +210,15 @@ class Session:
     def painting_state(self) -> dict:
         group, array = self._painting_array(create=False)
         if group is None:
-            return {"exists": False, "revision": None}
+            return {"exists": False, "revision": None, "can_undo": False}
         meta = group.attrs.get("cellcanvas") or {}
-        return {"exists": True, "revision": meta.get("revision"), "shape": list(array.shape), "dtype": str(array.dtype)}
+        return {
+            "exists": True,
+            "revision": meta.get("revision"),
+            "shape": list(array.shape),
+            "dtype": str(array.dtype),
+            "can_undo": bool(meta.get("undo")),
+        }
 
     def published_state(self) -> dict:
         seg = self._segmentation(self.binding.prediction)
@@ -221,7 +227,7 @@ class Session:
         meta = zarr.open_group(seg.zarr(), mode="r").attrs.get("cellcanvas") or {}
         return {"exists": True, **meta}
 
-    def paint(self, base_revision: Optional[str], strokes: list[dict]) -> dict:
+    def paint(self, base_revision: Optional[str], strokes: list[dict], stroke_id: Optional[str] = None) -> dict:
         """Apply brush strokes (discs in one plane, voxel indices x, y, z) to the painting; returns the revision."""
         geometry = self.tomogram_geometry()
         shape = geometry["shape"]  # z, y, x
@@ -246,13 +252,69 @@ class Session:
             meta = dict(group.attrs.get("cellcanvas") or {})
             if base_revision != meta.get("revision"):
                 raise CellCanvasError("Painting changed since it was loaded; reload it.", "revision_conflict")
-            changed = 0
+            before = np.asarray(array[:])
+            after = before.copy()
             for stroke in strokes:
-                changed += _apply_stroke(array, stroke, shape)
+                _apply_stroke(after, stroke, shape)
+            indices = np.flatnonzero(before.ravel() != after.ravel())
+            if not len(indices):
+                return {"revision": base_revision, "changed_voxels": 0, "can_undo": bool(meta.get("undo"))}
+            history = list(meta.get("undo", []))
+            store = group.require_group("_cellcanvas_undo")
+            # An out-of-band writer invalidates history rather than being silently rolled back.
+            if history and store[history[-1]].attrs["digest"] != _painting_digest(before):
+                history = []
             revision = uuid.uuid4().hex
-            meta.update(role="painting", binding=self.binding.id, revision=revision)
+            entry = store.create_group(revision)
+            entry.create_dataset("indices", data=indices)
+            entry.create_dataset("before", data=before.ravel()[indices])
+            entry.attrs.update(digest=_painting_digest(after), stroke_id=stroke_id or revision)
+            history.append(revision)
+            # Retain up to 20 complete gestures (and cap pathological multi-request gestures).
+            while len({store[key].attrs["stroke_id"] for key in history}) > 20 or len(history) > 128:
+                oldest = store[history[0]].attrs["stroke_id"]
+                history = [key for key in history if store[key].attrs["stroke_id"] != oldest]
+            array[:] = after
+            meta.update(role="painting", binding=self.binding.id, revision=revision, undo=history)
             group.attrs["cellcanvas"] = meta
-            return {"revision": revision, "changed_voxels": changed}
+            for key in list(store.group_keys()):
+                if key not in history:
+                    del store[key]
+            return {"revision": revision, "changed_voxels": len(indices), "can_undo": bool(history)}
+        finally:
+            self.binding.lock.release()
+
+    def undo(self, base_revision: Optional[str]) -> dict:
+        """Restore one saved gesture, guarded by revision and exact current label bytes."""
+        if not self.binding.lock.acquire(blocking=False):
+            raise CellCanvasError("Another painting save or publication is in progress.", "busy")
+        try:
+            group, array = self._painting_array(create=False)
+            meta = dict(group.attrs.get("cellcanvas") or {}) if group is not None else {}
+            if base_revision != meta.get("revision"):
+                raise CellCanvasError("Painting changed since it was loaded; reload it.", "revision_conflict")
+            history = list(meta.get("undo", []))
+            if not history:
+                raise CellCanvasError("No saved stroke to undo.", "nothing_to_undo")
+            store = group["_cellcanvas_undo"]
+            before = np.asarray(array[:])
+            if store[history[-1]].attrs["digest"] != _painting_digest(before):
+                raise CellCanvasError("Painting was edited outside this session; undo refused.", "revision_conflict")
+            after = before.copy()
+            gesture = store[history[-1]].attrs["stroke_id"]
+            removed = []
+            while history and store[history[-1]].attrs["stroke_id"] == gesture:
+                key = history.pop()
+                entry = store[key]
+                after.ravel()[entry["indices"][:]] = entry["before"][:]
+                removed.append(key)
+            revision = uuid.uuid4().hex
+            array[:] = after
+            meta.update(revision=revision, undo=history)
+            group.attrs["cellcanvas"] = meta
+            for key in removed:
+                del store[key]
+            return {"revision": revision, "changed_voxels": int((before != after).sum()), "can_undo": bool(history)}
         finally:
             self.binding.lock.release()
 
@@ -532,6 +594,10 @@ class Session:
         return Path(root)
 
 
+def _painting_digest(array: np.ndarray) -> str:
+    return hashlib.sha256(array.tobytes()).hexdigest()
+
+
 def _apply_stroke(array, stroke: dict, shape: list[int]) -> int:
     """Paint discs of ``radius`` voxels around each point (x, y, z indices) in the stroke's plane."""
     label = int(stroke["label"])
@@ -545,7 +611,7 @@ def _apply_stroke(array, stroke: dict, shape: list[int]) -> int:
     if np.any(lo >= hi):
         return 0
     region = tuple(slice(int(a), int(b)) for a, b in zip(lo, hi, strict=True))
-    block = np.asarray(array[region])
+    block = np.array(array[region], copy=True, order="C")
     before = block.copy()
     grid = np.indices(block.shape).reshape(3, -1).T + lo
     mask = np.zeros(len(grid), dtype=bool)

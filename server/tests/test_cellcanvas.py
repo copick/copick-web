@@ -205,7 +205,7 @@ def test_status_reports_geometry_agreement_and_mismatch(make_app, service, core)
         assert status["check"]["ok"], status["check"]["problems"]
         assert status["check"]["copick"]["shape"] == list(SHAPE)
         assert status["check"]["copick"]["scale_angstrom"] == [VOXEL_SIZE] * 3
-        assert status["painting"] == {"exists": False, "revision": None}
+        assert status["painting"] == {"exists": False, "revision": None, "can_undo": False}
         core.scale, core.shape = 1.0, [32, 32, 31]
         problems = c.get(f"{BASE}/ts1").json()["check"]["problems"]
         assert any("voxel size" in p for p in problems) and any("shape" in p for p in problems)
@@ -349,6 +349,7 @@ def test_read_only_refuses_writes(make_app, service, tmp_path):
     with serving(app, service):
         c = TestClient(app)
         assert c.post(f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]])]}).status_code == 403
+        assert c.post(f"{BASE}/ts1/undo", json={"base_revision": None}).status_code == 403
         assert c.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())}).status_code == 403
         assert c.get(f"{BASE}/ts1").status_code == 200
 
@@ -391,3 +392,80 @@ def test_binding_by_config_works_under_a_host_mount(tmp_path, demo_config, core)
         assert saved.status_code == 200
         # Another project's ID does not see this binding.
         assert host.get(f"{MOUNT}/api/projects/other/cellcanvas/bindings").status_code in (200, 404)
+
+
+def test_undo_overlap_erase_reload_and_conflicts(make_app, service):
+    app = make_app()
+    with serving(app, service):
+        client = TestClient(app)
+        revision = None
+        snapshots = []
+        for label in (1, 2, 0):
+            result = client.post(
+                f"{BASE}/ts1/painting",
+                json={"base_revision": revision, "strokes": [stroke(label, [[4, 5, 6]], radius=0)]},
+            )
+            assert result.status_code == 200, result.text
+            revision = result.json()["revision"]
+            snapshots.append(painting_array(service))
+        assert client.post(f"{BASE}/ts1/undo", json={"base_revision": "stale"}).status_code == 409
+        np.testing.assert_array_equal(painting_array(service), snapshots[-1])
+    # Reload the application: history is persisted with the segmentation, not in browser/server memory.
+    app = make_app()
+    with serving(app, service):
+        client = TestClient(app)
+        assert client.get(f"{BASE}/ts1").json()["painting"]["can_undo"]
+        for expected in (snapshots[1], snapshots[0], np.zeros_like(snapshots[0])):
+            result = client.post(f"{BASE}/ts1/undo", json={"base_revision": revision})
+            assert result.status_code == 200, result.text
+            revision = result.json()["revision"]
+            np.testing.assert_array_equal(painting_array(service), expected)
+        assert not result.json()["can_undo"]
+        assert client.post(f"{BASE}/ts1/undo", json={"base_revision": revision}).json()["code"] == "nothing_to_undo"
+
+
+def test_undo_groups_chunks_and_refuses_out_of_band_changes(client, service):
+    revision = None
+    for x in (3, 4):
+        result = client.post(
+            f"{BASE}/ts1/painting",
+            json={"base_revision": revision, "stroke_id": "one-gesture", "strokes": [stroke(2, [[x, 5, 6]], radius=0)]},
+        ).json()
+        revision = result["revision"]
+    result = client.post(f"{BASE}/ts1/undo", json={"base_revision": revision}).json()
+    assert result["changed_voxels"] == 2 and not result["can_undo"]
+    assert not painting_array(service).any()
+    result = client.post(
+        f"{BASE}/ts1/painting",
+        json={"base_revision": result["revision"], "strokes": [stroke(1, [[3, 5, 6]], radius=0)]},
+    ).json()
+    revision = result["revision"]
+    # No-op strokes do not hide the most recent meaningful edit.
+    same = client.post(
+        f"{BASE}/ts1/painting", json={"base_revision": revision, "strokes": [stroke(1, [[3, 5, 6]], radius=0)]}
+    ).json()
+    assert same["revision"] == revision and same["changed_voxels"] == 0
+    seg = service.get_segmentations(RUN, "cellcanvas-painting", "cellcanvas", "1", VOXEL_SIZE)[0]
+    group = zarr.open_group(seg.zarr(), mode="r+")
+    group["0"][0, 0, 0] = 2  # A writer that does not participate in revision tracking.
+    before = painting_array(service)
+    result = client.post(f"{BASE}/ts1/undo", json={"base_revision": revision})
+    assert result.status_code == 409 and result.json()["code"] == "revision_conflict"
+    np.testing.assert_array_equal(painting_array(service), before)
+
+
+def test_undo_retains_twenty_gestures(client, service):
+    revision = None
+    for i in range(22):
+        result = client.post(
+            f"{BASE}/ts1/painting",
+            json={"base_revision": revision, "strokes": [stroke(1 + i % 2, [[3, 5, 6]], radius=0)]},
+        ).json()
+        revision = result["revision"]
+    for _ in range(20):
+        response = client.post(f"{BASE}/ts1/undo", json={"base_revision": revision})
+        assert response.status_code == 200
+        result = response.json()
+        revision = result["revision"]
+    assert not result["can_undo"]
+    assert painting_array(service)[6, 5, 3] == 2

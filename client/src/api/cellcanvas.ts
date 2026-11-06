@@ -79,7 +79,7 @@ export interface BindingStatus {
     model_painting_revision: string | null;
     painting: { revision: string | null };
   } | null;
-  painting: { exists: boolean; revision: string | null };
+  painting: { exists: boolean; revision: string | null; can_undo: boolean };
   operation: OperationState;
 }
 
@@ -146,10 +146,21 @@ export const cellcanvasApi = {
     id: string,
     baseRevision: string | null,
     strokes: Stroke[],
+    strokeId?: string,
   ) =>
-    call<{ revision: string; changed_voxels: number }>(
-      `${base(projectId)}/${encodeURIComponent(id)}/painting`,
-      { base_revision: baseRevision, strokes },
+    call<{
+      revision: string | null;
+      changed_voxels: number;
+      can_undo: boolean;
+    }>(`${base(projectId)}/${encodeURIComponent(id)}/painting`, {
+      base_revision: baseRevision,
+      strokes,
+      stroke_id: strokeId,
+    }),
+  undo: (projectId: string, id: string, baseRevision: string | null) =>
+    call<{ revision: string; changed_voxels: number; can_undo: boolean }>(
+      `${base(projectId)}/${encodeURIComponent(id)}/undo`,
+      { base_revision: baseRevision },
     ),
   submit: (
     projectId: string,
