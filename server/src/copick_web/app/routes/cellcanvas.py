@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..dependencies import WRITES, get_copick_service, get_registry
-from ..services.annotations import MAX_STROKE_POINTS, AnnotationError
+from ..services.annotations import MAX_STROKE_POINTS, AnnotationError, SegmentationRef
 from ..services.cellcanvas import Binding, open_session
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
@@ -60,6 +60,15 @@ class PaintRequest(BaseModel):
 
 class UndoRequest(BaseModel):
     base_revision: Optional[str] = None
+
+
+class AcceptRequest(BaseModel):
+    base_revision: Optional[str] = None
+    proposal: dict
+    proposal_label: int
+    proposal_digest: str
+    label: int
+    box: Optional[list[list[int]]] = Field(default=None, min_length=3, max_length=3)
 
 
 class OperationRequest(BaseModel):
@@ -130,6 +139,31 @@ async def undo(
 ):
     session = _session(binding_id, bindings, service, client_factory)
     return await _call(session.undo, body.base_revision)
+
+
+@router.post("/bindings/{binding_id}/accept", dependencies=WRITES)
+async def accept(
+    binding_id: str,
+    body: AcceptRequest,
+    bindings: list[Binding] = Depends(get_bindings),
+    service: CopickService = Depends(get_copick_service),
+    client_factory=Depends(get_client_factory),
+):
+    """Accept one label of a completed proposal (e.g. this binding's prediction) into the painting as a bound class."""
+    session = _session(binding_id, bindings, service, client_factory)
+    try:
+        ref = SegmentationRef.parse(body.proposal, "proposal")
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from None
+    return await _call(
+        session.painting.accept,
+        body.base_revision,
+        ref,
+        body.proposal_label,
+        body.label,
+        body.proposal_digest,
+        body.box,
+    )
 
 
 @router.post("/bindings/{binding_id}/{kind}", dependencies=WRITES)

@@ -119,6 +119,12 @@ changing and deleting object types. Reloading a project stays allowed, as it onl
 pick creation, editing and deletion, filament tracing and editing, and the object type editor. Viewing every layer
 works as before.
 
+### Painting and model proposals
+
+Every writable viewer can paint semantic classes into a copick multilabel segmentation, undo, and accept completed
+model proposals into unknown voxels; CellCanvas training (`CELLCANVAS_BINDINGS`) and nnInteractive prompts
+(`NNINTERACTIVE_URL`) are optional backends. See [docs/cellcanvas-web-port.md](docs/cellcanvas-web-port.md).
+
 ### Embedding in another FastAPI application
 
 `create_app` builds a new, independent app each call, which another FastAPI application can mount under a prefix of

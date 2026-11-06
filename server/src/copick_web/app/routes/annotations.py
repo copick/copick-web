@@ -110,7 +110,7 @@ async def state(target: Target = Depends(query_target), service: CopickService =
     p = painting(target, service)
 
     def run():
-        return {**p.state(), "classes": project_classes(service)}
+        return {**p.state(), "grid": p.grid(), "classes": project_classes(service)}
 
     return await call(run)
 

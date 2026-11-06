@@ -35,12 +35,11 @@ import httpx
 import numpy as np
 import zarr
 
-from .annotations import AnnotationError, Painting, SegmentationRef, record_proposal
+from .annotations import UNIT_ANGSTROM, AnnotationError, Painting, SegmentationRef, record_proposal
 
 logger = logging.getLogger(__name__)
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
-UNIT_ANGSTROM = {"angstrom": 1.0, "ångström": 1.0, "nanometer": 10.0, "nm": 10.0}
 
 
 class CellCanvasError(AnnotationError):
@@ -125,24 +124,6 @@ def load_bindings(path: str | os.PathLike) -> list[Binding]:
 # --- copick side -------------------------------------------------------------------------------------------------
 
 
-def _ome_level0(group) -> tuple[list[float], list[float], float]:
-    """Scale, translation (z, y, x) and Å per unit of an OME-Zarr group's first level."""
-    multiscales = group.attrs.get("multiscales") or [{}]
-    ms = multiscales[0]
-    axes = [a for a in ms.get("axes", []) if a.get("type") == "space"]
-    units = {a.get("unit", "angstrom") for a in axes} or {"angstrom"}
-    if len(units) != 1 or next(iter(units)) not in UNIT_ANGSTROM:
-        raise CellCanvasError(f"Unsupported tomogram units {sorted(units)}", "geometry_mismatch")
-    scale, translation = [1.0, 1.0, 1.0], [0.0, 0.0, 0.0]
-    datasets = ms.get("datasets") or [{}]
-    for transform in datasets[0].get("coordinateTransformations", []):
-        if transform.get("type") == "scale":
-            scale = [float(v) for v in transform["scale"][-3:]]
-        elif transform.get("type") == "translation":
-            translation = [float(v) for v in transform["translation"][-3:]]
-    return scale, translation, UNIT_ANGSTROM[next(iter(units))]
-
-
 class Session:
     """Operations on one binding of one opened copick project."""
 
@@ -150,26 +131,16 @@ class Session:
         self.binding = binding
         self.service = service
         self._client_factory = client_factory or (lambda: httpx.Client(timeout=30))
-        # The painting is an ordinary copick painting restricted to the bound classes; it shares the binding's lock
-        # with prediction publication.
+        # An ordinary copick painting restricted to the bound classes, under the same per-segmentation lock as the
+        # generic painting routes; the binding's own lock serializes prediction publication.
         self.painting = Painting(
-            service, binding.run, binding.voxel_size, binding.tomo_type, binding.painting, binding.classes, binding.lock
+            service, binding.run, binding.voxel_size, binding.tomo_type, binding.painting, binding.classes
         )
 
     # copick storage --------------------------------------------------------------------------------------------
 
     def tomogram_geometry(self) -> dict:
-        b = self.binding
-        tomogram = self.service.get_tomogram(b.run, b.voxel_size, b.tomo_type)
-        if tomogram is None:
-            raise CellCanvasError("Bound reconstruction not found in the copick project.", "not_found", 404)
-        group = zarr.open_group(tomogram.zarr(), mode="r")
-        scale, translation, per_unit = _ome_level0(group)
-        return {
-            "shape": list(group["0"].shape),
-            "scale_angstrom": [s * per_unit for s in scale],
-            "translation_angstrom": [t * per_unit for t in translation],
-        }
+        return self.painting.grid()
 
     def _segmentation(self, ref: SegmentationRef):
         b = self.binding
@@ -316,7 +287,7 @@ class Session:
         return self.reconcile()
 
     def _sync_painting(self, service_id: str, shape: list[int]) -> Optional[str]:
-        if not self.binding.lock.acquire(blocking=False):
+        if not self.painting.lock.acquire(blocking=False):
             raise CellCanvasError("A painting save is in progress; retry.", "busy")
         try:
             group = self.painting._open(self.binding.painting)
@@ -347,7 +318,7 @@ class Session:
             )
             return revision
         finally:
-            self.binding.lock.release()
+            self.painting.lock.release()
 
     def reconcile(self) -> dict:
         """Resolve the pending receipt; publish a successful prediction before reporting it complete."""

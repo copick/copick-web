@@ -1,6 +1,7 @@
 /**
- * CellCanvas learning toolbar and slice brush for the opened reconstruction, shown when the server binds it to a
- * CellCanvas core dataset. Paint semantic classes on an ortho pane (erase returns voxels to unannotated), then
+ * Painting toolbar of the opened reconstruction. When the server binds it to a CellCanvas core dataset, the bound
+ * painting is edited with the binding's classes and Train/Predict run in the shared core; otherwise the generic
+ * `AnnotationPanel` is shown. Paint semantic classes on an ortho pane (erase returns voxels to unannotated), then
  * Train and Predict in the shared core. Each stroke is saved to the copick painting segmentation; a prediction is
  * displayed only after its complete publication, by the same refresh as Reload project.
  */
@@ -8,6 +9,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MutableRefObject,
@@ -19,43 +21,31 @@ import {
   Button,
   Chip,
   CircularProgress,
-  MenuItem,
-  Select,
-  Slider,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
+import { annotationsApi } from "@/api/annotations";
 import {
   cellcanvasApi,
-  chunkStroke,
   describeOperation,
   geometryMatches,
   newPublication,
   pendingOperation,
-  strokeSegment,
   type CellCanvasBinding,
   type OperationState,
-  type Stroke,
 } from "@/api/cellcanvas";
 import { refreshProjectData } from "@/api/projectRevision";
-import {
-  segmentationKey,
-  useCopick,
-  useProjectId,
-} from "@/contexts/CopickContext";
+import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { useScene } from "@/contexts/SceneContext";
+import { AnnotationPanel } from "@/components/annotation/AnnotationPanel";
+import { PaintControls } from "@/components/annotation/PaintControls";
 import {
-  AXES,
-  PLANES,
-  planeAxes,
-  worldToIndices,
-  type XYZ,
-} from "@/idetik/coordinates";
+  ProposalTools,
+  useShowSegmentation,
+  type PointHandler,
+} from "@/components/annotation/ProposalTools";
+import { usePainting } from "@/components/annotation/usePainting";
 import { useLatestRef } from "@/utils/useLatestRef";
-
-type Mode = "off" | "paint" | "erase";
 
 interface Props {
   paneRefs: MutableRefObject<(HTMLDivElement | null)[]>;
@@ -74,7 +64,9 @@ export function CellCanvasPanel({ paneRefs }: Props) {
     staleTime: Infinity,
   });
   const binding = bindings.data?.bindings[0];
-  if (!binding) return null;
+  if (!bindings.data) return null;
+  // Without a CellCanvas binding, painting and proposals still work on any copick segmentation.
+  if (!binding) return <AnnotationPanel paneRefs={paneRefs} />;
   return (
     <BindingPanel key={binding.id} binding={binding} paneRefs={paneRefs} />
   );
@@ -86,28 +78,26 @@ function BindingPanel({
 }: { binding: CellCanvasBinding } & Props) {
   const projectId = useProjectId();
   const queryClient = useQueryClient();
-  const { state, addSegmentation } = useCopick();
-  const { scene, visible } = useScene();
-  const [mode, setMode] = useState<Mode>("off");
-  const [label, setLabel] = useState(binding.classes[0].id);
-  const [radius, setRadius] = useState(2);
-  const [message, setMessage] = useState<{
-    severity: "error" | "info";
-    text: string;
-  } | null>(null);
+  const { scene } = useScene();
   const [operation, setOperation] = useState<OperationState | undefined>();
-  const [saving, setSaving] = useState(false);
-  const editing = useRef(false);
-  const drawing = useRef(false);
-  const [canUndo, setCanUndo] = useState(false);
-  const revision = useRef<string | null>(null);
-  const [paintRevision, setPaintRevision] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const shownPublication = useRef<string | null>(null);
   const seenResolved = useRef<string | null>(null);
+  const pointHandler = useRef<
+    ((voxel: [number, number, number], include: boolean) => void) | null
+  >(null);
+  const setPointHandler = useCallback((handler: PointHandler | null) => {
+    pointHandler.current = handler;
+  }, []);
 
   const status = useQuery({
     queryKey: ["cellcanvas-status", projectId, binding.id],
     queryFn: () => cellcanvasApi.status(projectId, binding.id),
+    staleTime: Infinity,
+  });
+  const backends = useQuery({
+    queryKey: ["backends", projectId],
+    queryFn: () => annotationsApi.backends(projectId),
     staleTime: Infinity,
   });
   const geometryOk =
@@ -118,28 +108,28 @@ function BindingPanel({
       scene.geometry.axes,
       scene.geometry.angstromPerUnit,
     );
-
-  const show = useCallback(
-    (ref: CellCanvasBinding["painting"]) => {
-      const seg = {
-        name: ref.name,
-        userId: ref.user_id,
-        sessionId: ref.session_id,
-        voxelSize: binding.voxel_size,
-        segmentationType: "multilabel" as const,
-      };
-      if (
-        !state.selectedSegmentations.some(
-          (s) => segmentationKey(s) === segmentationKey(seg),
-        )
-      )
-        addSegmentation(seg);
-    },
-    [addSegmentation, binding.voxel_size, state.selectedSegmentations],
-  );
+  const show = useShowSegmentation(binding.voxel_size);
   const showRef = useLatestRef(show);
+  const refresh = useCallback(async () => {
+    await refreshProjectData(queryClient, projectId);
+    showRef.current(binding.painting);
+  }, [binding.painting, projectId, queryClient, showRef]);
+  const painter = useMemo(
+    () => cellcanvasApi.painter(projectId, binding.id),
+    [projectId, binding.id],
+  );
+  const tools = usePainting({
+    painter,
+    paneRefs,
+    state: status.data?.painting,
+    reload: status.refetch,
+    refresh,
+    enabled: geometryOk,
+    blocked: !!operation?.pending,
+    onPoint: (voxel, include) => pointHandler.current?.(voxel, include),
+  });
 
-  // Reconcile: adopt the server's view of painting revision, pending receipt and publication.
+  // Reconcile: adopt the server's view of the pending receipt and publication.
   const adopt = useCallback(
     async (next: OperationState, fromStatus = false) => {
       setOperation(next);
@@ -158,12 +148,8 @@ function BindingPanel({
   );
 
   useEffect(() => {
-    if (!status.data) return;
-    if (editing.current) return;
-    setCanUndo(status.data.painting.can_undo);
-    revision.current = status.data.painting.revision;
-    setPaintRevision(revision.current);
-    void adopt(status.data.operation, true);
+    const data = status.data;
+    if (data) void Promise.resolve().then(() => adopt(data.operation, true));
   }, [status.data, adopt]);
 
   // Display the latest complete publication; a new one reopens label sources first (never an incomplete one).
@@ -185,7 +171,7 @@ function BindingPanel({
       try {
         await adopt(await cellcanvasApi.operation(projectId, binding.id));
       } catch (e) {
-        setMessage({ severity: "error", text: (e as Error).message });
+        setMessage((e as Error).message);
       }
     }, 1000);
     return () => window.clearInterval(timer);
@@ -203,329 +189,123 @@ function BindingPanel({
       const error = e as Error & { code?: string; status?: number };
       if (error.code && error.code !== "service_unavailable")
         pendingOperation.set(projectId, binding.id, null);
-      setMessage({
-        severity: "error",
-        text:
-          error.code === "service_unavailable" || error instanceof TypeError
-            ? `${error.message} Retrying ${kind} reuses the same operation.`
-            : error.message,
-      });
+      setMessage(
+        error.code === "service_unavailable" || error instanceof TypeError
+          ? `${error.message} Retrying ${kind} reuses the same operation.`
+          : error.message,
+      );
     }
   };
 
-  const saveStroke = useCallback(
-    async (stroke: Stroke) => {
-      if (editing.current) return;
-      editing.current = true;
-      setSaving(true);
-      setMessage(null);
-      const strokeId = crypto.randomUUID();
-      try {
-        for (const chunk of chunkStroke(stroke)) {
-          const saved = await cellcanvasApi.paint(
-            projectId,
-            binding.id,
-            revision.current,
-            [chunk],
-            strokeId,
-          );
-          revision.current = saved.revision;
-          setCanUndo(saved.can_undo);
-        }
-        setPaintRevision(revision.current);
-        await refreshProjectData(queryClient, projectId);
-        showRef.current(binding.painting);
-      } catch (e) {
-        const error = e as Error & { code?: string };
-        setMessage({
-          severity: "error",
-          text:
-            error.code === "revision_conflict"
-              ? "The painting changed elsewhere; reloaded it. Repeat the last stroke."
-              : error.message,
-        });
-        editing.current = false;
-        await status.refetch();
-        await refreshProjectData(queryClient, projectId);
-      } finally {
-        editing.current = false;
-        setSaving(false);
-      }
-    },
-    [binding.id, binding.painting, projectId, queryClient, showRef, status],
-  );
-
-  const undo = useCallback(async () => {
-    if (editing.current || drawing.current || !canUndo || operation?.pending)
-      return;
-    editing.current = true;
-    setSaving(true);
-    setMessage(null);
-    try {
-      const saved = await cellcanvasApi.undo(
-        projectId,
-        binding.id,
-        revision.current,
-      );
-      revision.current = saved.revision;
-      setPaintRevision(saved.revision);
-      setCanUndo(saved.can_undo);
-      await refreshProjectData(queryClient, projectId);
-      showRef.current(binding.painting);
-    } catch (e) {
-      setMessage({ severity: "error", text: (e as Error).message });
-      editing.current = false;
-      await status.refetch();
-      await refreshProjectData(queryClient, projectId);
-    } finally {
-      editing.current = false;
-      setSaving(false);
-    }
-  }, [
-    canUndo,
-    operation?.pending,
-    projectId,
-    binding.id,
-    binding.painting,
-    queryClient,
-    showRef,
-    status,
-  ]);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      if (target.closest("input, textarea, select, [contenteditable=true]"))
-        return;
-      if (
-        (event.ctrlKey || event.metaKey) &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === "z" &&
-        geometryOk
-      ) {
-        event.preventDefault();
-        void undo();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [undo, geometryOk]);
-
-  const strokeRef = useLatestRef({
-    mode,
-    label,
-    radius,
-    geometryOk,
-    busy: saving || !!operation?.pending,
-    saveStroke,
-  });
-  const visibleKey = visible.map(Number).join("");
-
-  // Brush: capture-phase listeners keep painting drags from also panning the pane.
-  useEffect(() => {
-    if (!scene) return;
-    const { runtime, geometry, sliceCoords } = scene;
-    const disposers: (() => void)[] = [];
-    PLANES.forEach((plane, i) => {
-      const element = paneRefs.current[i];
-      if (!element || !visible[i]) return;
-      const w = planeAxes[plane][2];
-      let stroke: Stroke | null = null;
-      const voxel = (event: PointerEvent): [number, number, number] => {
-        const world = runtime.clientToWorld(
-          plane,
-          event.clientX,
-          event.clientY,
-        ) as XYZ;
-        world[w] = sliceCoords[AXES[w]] ?? world[w];
-        return worldToIndices(world, geometry.axes);
-      };
-      const down = (event: PointerEvent) => {
-        const s = strokeRef.current;
-        if (
-          s.mode === "off" ||
-          !s.geometryOk ||
-          s.busy ||
-          editing.current ||
-          event.button !== 0
-        )
-          return;
-        event.stopPropagation();
-        event.preventDefault();
-        element.setPointerCapture(event.pointerId);
-        drawing.current = true;
-        stroke = {
-          label: s.mode === "erase" ? 0 : s.label,
-          radius: s.radius,
-          plane,
-          points: [voxel(event)],
-        };
-      };
-      const move = (event: PointerEvent) => {
-        if (!stroke) return;
-        event.stopPropagation();
-        const last = stroke.points[stroke.points.length - 1];
-        stroke.points.push(...strokeSegment(last, voxel(event)).slice(1));
-      };
-      const up = (event: PointerEvent) => {
-        if (!stroke) return;
-        event.stopPropagation();
-        drawing.current = false;
-        const done = stroke;
-        stroke = null;
-        void strokeRef.current.saveStroke(done);
-      };
-      const cancel = () => {
-        stroke = null;
-        drawing.current = false;
-      };
-      element.addEventListener("pointercancel", cancel, true);
-      element.addEventListener("pointerdown", down, true);
-      element.addEventListener("pointermove", move, true);
-      element.addEventListener("pointerup", up, true);
-      disposers.push(() => {
-        cancel();
-        element.removeEventListener("pointercancel", cancel, true);
-        element.removeEventListener("pointerdown", down, true);
-        element.removeEventListener("pointermove", move, true);
-        element.removeEventListener("pointerup", up, true);
-      });
-    });
-    return () => disposers.forEach((d) => d());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene, visibleKey]);
-
-  useEffect(() => {
-    const panes = paneRefs.current.slice(0, 3);
-    const cursor = mode === "off" || !geometryOk ? "" : "crosshair";
-    for (const pane of panes) if (pane) pane.style.cursor = cursor;
-    return () => {
-      for (const pane of panes) if (pane) pane.style.cursor = "";
-    };
-  }, [mode, geometryOk, paneRefs, visibleKey]);
-
   const core = status.data?.core;
-  const busy = !!operation?.pending || saving;
+  const busy = !!operation?.pending || tools.saving;
   const stale =
     core?.trained &&
-    paintRevision !== null &&
-    core.model_painting_revision !== paintRevision;
+    tools.revision !== null &&
+    core.model_painting_revision !== tools.revision;
   const opText = describeOperation(operation);
   const model = String(binding.features.model ?? "unspecified features");
+  const nn = backends.data?.nninteractive;
+  const shape = status.data?.check.copick
+    ? ([...status.data.check.copick.shape].reverse() as [
+        number,
+        number,
+        number,
+      ])
+    : null;
+  const target = {
+    run: binding.run,
+    voxel_size: binding.voxel_size,
+    tomo_type: binding.tomo_type,
+    painting: binding.painting,
+  };
   return (
     <Box
       data-testid="cellcanvas-panel"
       sx={{
         display: "flex",
-        alignItems: "center",
-        gap: 1.5,
+        flexDirection: "column",
+        gap: 0.5,
         p: 1,
         borderBottom: 1,
         borderColor: "divider",
         backgroundColor: "background.paper",
-        flexWrap: "wrap",
       }}
     >
-      <Tooltip title={`Features: ${model}`}>
-        <Chip
+      <PaintControls
+        tools={tools}
+        classes={binding.classes}
+        geometryOk={geometryOk}
+        busy={!!operation?.pending}
+        problem={
+          status.data && !status.data.check.ok
+            ? `Not bound: ${status.data.check.problems.join(" ")}`
+            : status.data?.check.ok && !geometryOk && scene
+              ? "The opened volume's grid differs from the bound reconstruction; painting is disabled."
+              : null
+        }
+      >
+        <Tooltip title={`Features: ${model}`}>
+          <Chip
+            size="small"
+            color={geometryOk ? "primary" : "warning"}
+            label={`CellCanvas · ${binding.id}`}
+          />
+        </Tooltip>
+        {status.isLoading && <CircularProgress size={16} />}
+      </PaintControls>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1.5,
+          flexWrap: "wrap",
+        }}
+      >
+        <Button
           size="small"
-          color={geometryOk ? "primary" : "warning"}
-          label={`CellCanvas · ${binding.id}`}
-        />
-      </Tooltip>
-      {status.isLoading && <CircularProgress size={16} />}
-      {status.data && !status.data.check.ok && (
-        <Alert severity="warning" sx={{ py: 0 }}>
-          Not bound: {status.data.check.problems.join(" ")}
-        </Alert>
-      )}
-      {status.data?.check.ok && !geometryOk && scene && (
-        <Alert severity="warning" sx={{ py: 0 }}>
-          The opened volume's grid differs from the bound reconstruction;
-          painting is disabled.
-        </Alert>
-      )}
-      <ToggleButtonGroup
-        size="small"
-        exclusive
-        value={mode}
-        onChange={(_, v: Mode | null) => v && setMode(v)}
-        disabled={!geometryOk}
-      >
-        <ToggleButton value="off" aria-label="Navigate">
-          Navigate
-        </ToggleButton>
-        <ToggleButton value="paint" aria-label="Paint">
-          Paint
-        </ToggleButton>
-        <ToggleButton value="erase" aria-label="Erase to unannotated">
-          Erase
-        </ToggleButton>
-      </ToggleButtonGroup>
-      <Select
-        size="small"
-        value={label}
-        onChange={(e) => setLabel(Number(e.target.value))}
-        disabled={mode === "erase"}
-        inputProps={{ "aria-label": "Class" }}
-      >
-        {binding.classes.map((c) => (
-          <MenuItem key={c.id} value={c.id}>
-            {c.id} · {c.name}
-          </MenuItem>
-        ))}
-      </Select>
-      <Box sx={{ width: 120, display: "flex", alignItems: "center", gap: 1 }}>
-        <Typography variant="caption">r={radius}</Typography>
-        <Slider
-          size="small"
-          min={0}
-          max={16}
-          value={radius}
-          onChange={(_, v) => setRadius(v as number)}
-          aria-label="Brush radius (voxels)"
-        />
-      </Box>
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={!geometryOk || busy || !canUndo}
-        title="Undo last saved stroke (Ctrl/Cmd+Z). Up to 20 strokes, including erase."
-        onClick={() => void undo()}
-      >
-        Undo
-      </Button>
-      {saving && <Typography variant="caption">Saving…</Typography>}
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={!geometryOk || busy}
-        onClick={() => submit("train")}
-      >
-        Train
-      </Button>
-      <Button
-        size="small"
-        variant="outlined"
-        disabled={!geometryOk || busy || !core?.trained}
-        onClick={() => submit("predict")}
-      >
-        Predict
-      </Button>
-      {busy && operation?.pending && <CircularProgress size={16} />}
-      <Typography variant="caption" data-testid="cellcanvas-status">
-        {opText}
-        {stale ? " Painting changed since training." : ""}
-      </Typography>
-      {message && (
-        <Alert
-          severity={message.severity}
-          onClose={() => setMessage(null)}
-          sx={{ py: 0 }}
+          variant="outlined"
+          disabled={!geometryOk || busy}
+          onClick={() => submit("train")}
         >
-          {message.text}
-        </Alert>
+          Train
+        </Button>
+        <Button
+          size="small"
+          variant="outlined"
+          disabled={!geometryOk || busy || !core?.trained}
+          onClick={() => submit("predict")}
+        >
+          Predict
+        </Button>
+        {busy && operation?.pending && <CircularProgress size={16} />}
+        <Typography variant="caption" data-testid="cellcanvas-status">
+          {opText}
+          {stale ? " Painting changed since training." : ""}
+        </Typography>
+        {message && (
+          <Alert
+            severity="error"
+            onClose={() => setMessage(null)}
+            sx={{ py: 0 }}
+          >
+            {message}
+          </Alert>
+        )}
+      </Box>
+      {geometryOk && (
+        <ProposalTools
+          projectId={projectId}
+          target={target}
+          painting={tools}
+          classes={binding.classes}
+          shape={shape}
+          nninteractive={!!nn?.available && !nn.needs_local_project}
+          prediction={
+            operation?.published?.complete ? binding.prediction : null
+          }
+          setPointHandler={setPointHandler}
+        />
       )}
     </Box>
   );

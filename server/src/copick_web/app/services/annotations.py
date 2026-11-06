@@ -30,6 +30,7 @@ MAX_RADIUS_VOXELS = 64
 MAX_UNDO_GESTURES = 20
 META = "painting"
 UNDO_GROUP = "_painting_undo"
+UNIT_ANGSTROM = {"angstrom": 1.0, "ångström": 1.0, "nanometer": 10.0, "nm": 10.0}
 PLANES = {"XY": (1, 2), "XZ": (0, 2), "YZ": (0, 1)}  # in-plane axes in z, y, x order
 
 
@@ -92,17 +93,48 @@ class Painting:
 
     # storage --------------------------------------------------------------------------------------------------
 
-    def shape(self) -> list[int]:
+    def _tomogram(self):
         tomogram = self.service.get_tomogram(self.run, self.voxel_size, self.tomo_type)
         if tomogram is None:
             raise AnnotationError("Reconstruction not found in the copick project.", "not_found", 404)
-        return list(zarr.open_group(tomogram.zarr(), mode="r")["0"].shape)
+        return zarr.open_group(tomogram.zarr(), mode="r")
+
+    def shape(self) -> list[int]:
+        return list(self._tomogram()["0"].shape)
+
+    def grid(self) -> dict:
+        """Shape, voxel size and origin (z, y, x; Å) of the reconstruction's full-resolution level."""
+        group = self._tomogram()
+        ms = (group.attrs.get("multiscales") or [{}])[0]
+        units = {a.get("unit", "angstrom") for a in ms.get("axes", []) if a.get("type") == "space"} or {"angstrom"}
+        if len(units) != 1 or next(iter(units)) not in UNIT_ANGSTROM:
+            raise AnnotationError(f"Unsupported tomogram units {sorted(units)}", "geometry_mismatch")
+        per_unit = UNIT_ANGSTROM[next(iter(units))]
+        scale, translation = [1.0, 1.0, 1.0], [0.0, 0.0, 0.0]
+        for transform in (ms.get("datasets") or [{}])[0].get("coordinateTransformations", []):
+            if transform.get("type") == "scale":
+                scale = [float(v) for v in transform["scale"][-3:]]
+            elif transform.get("type") == "translation":
+                translation = [float(v) for v in transform["translation"][-3:]]
+        return {
+            "shape": list(group["0"].shape),
+            "scale_angstrom": [v * per_unit for v in scale],
+            "translation_angstrom": [v * per_unit for v in translation],
+        }
 
     def _open(self, ref: SegmentationRef):
-        segs = self.service.get_segmentations(
-            self.run, ref.name, ref.user_id, ref.session_id, self.voxel_size, seg_types=("multilabel",)
-        )
-        return zarr.open_group(segs[0].zarr(), mode="r+") if segs else None
+        """The segmentation's group; one written by another process since copick listed the run is found too."""
+        for attempt in range(2):
+            segs = self.service.get_segmentations(
+                self.run, ref.name, ref.user_id, ref.session_id, self.voxel_size, seg_types=("multilabel",)
+            )
+            if segs:
+                return zarr.open_group(segs[0].zarr(), mode="r+")
+            run = self.service.get_run(self.run)
+            if attempt or run is None:
+                return None
+            run.refresh_segmentations()
+            self.service.clear_stores()
 
     def _group(self, create_shape=None):
         group = self._open(self.ref)

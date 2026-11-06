@@ -473,3 +473,32 @@ def test_undo_retains_twenty_gestures(client, service):
         revision = result["revision"]
     assert not result["can_undo"]
     assert painting_array(service)[6, 5, 3] == 2
+
+
+def test_published_prediction_is_a_proposal_accepted_into_unknown_voxels_only(client, service, core):
+    saved = client.post(
+        f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]], radius=1), stroke(2, [[28, 28, 3]], radius=1)]}
+    ).json()
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    predicted = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4())}).json()
+    record = predicted["last"]["publication"]["proposal"]
+    assert record["producer"] == "cellcanvas" and record["complete"]
+    proposal = {"name": "cellcanvas-prediction", "user_id": "cellcanvas", "session_id": "1"}
+    body = {
+        "base_revision": saved["revision"],
+        "proposal": proposal,
+        "proposal_label": 2,
+        "proposal_digest": record["digest"],
+        "label": 2,
+        "box": [[0, 32], [0, 32], [3, 4]],  # one z slice
+    }
+    accepted = client.post(f"{BASE}/ts1/accept", json=body)
+    assert accepted.status_code == 200, accepted.text
+    painted = painting_array(service)
+    assert accepted.json()["kept_human_voxels"] == 5  # the human class-2 stroke is kept as painted
+    assert painted[3, 3, 3] == 1  # the human background label left of the class boundary is untouched
+    assert (painted[3, :, 16:] == 2).all()
+    assert painted[5, 20, 20] == 0  # outside the box stays unknown
+    # A label outside the binding's classes is refused even though the project defines it.
+    refused = client.post(f"{BASE}/ts1/accept", json={**body, "base_revision": accepted.json()["revision"], "label": 3})
+    assert refused.status_code == 400

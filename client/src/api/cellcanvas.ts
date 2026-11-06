@@ -6,6 +6,15 @@
  */
 
 import { API_BASE } from "./client";
+import { call, type Painter, type Stroke } from "./annotations";
+
+export {
+  ApiError as CellCanvasError,
+  chunkStroke,
+  geometryMatches,
+  strokeSegment,
+} from "./annotations";
+export type { Stroke } from "./annotations";
 
 export interface CellCanvasClass {
   id: number;
@@ -83,52 +92,8 @@ export interface BindingStatus {
   operation: OperationState;
 }
 
-export interface Stroke {
-  label: number;
-  radius: number;
-  plane: "XY" | "XZ" | "YZ";
-  /** Voxel indices (x, y, z). */
-  points: [number, number, number][];
-}
-
-export class CellCanvasError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string | undefined,
-    message: string,
-  ) {
-    super(message);
-    this.name = "CellCanvasError";
-  }
-}
-
 const base = (projectId: string) =>
   `${API_BASE}/projects/${encodeURIComponent(projectId)}/cellcanvas/bindings`;
-
-async function call<R>(url: string, body?: unknown): Promise<R> {
-  const response = await fetch(url, {
-    method: body === undefined ? "GET" : "POST",
-    headers:
-      body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const text = await response.text();
-  let data: { detail?: unknown; code?: string } | null = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    /* not JSON */
-  }
-  if (!response.ok) {
-    const detail =
-      typeof data?.detail === "string"
-        ? data.detail
-        : text || response.statusText;
-    throw new CellCanvasError(response.status, data?.code, detail);
-  }
-  return data as R;
-}
 
 export const cellcanvasApi = {
   list: (projectId: string, run: string, voxelSize: number, tomoType: string) =>
@@ -162,6 +127,21 @@ export const cellcanvasApi = {
       `${base(projectId)}/${encodeURIComponent(id)}/undo`,
       { base_revision: baseRevision },
     ),
+  /** The binding's painting, restricted to its classes (accepting also goes through the binding). */
+  painter: (projectId: string, id: string): Painter => ({
+    paint: (baseRevision, strokes, strokeId) =>
+      cellcanvasApi.paint(projectId, id, baseRevision, strokes, strokeId),
+    undo: (baseRevision) => cellcanvasApi.undo(projectId, id, baseRevision),
+    accept: (baseRevision, proposal, proposalLabel, label, box) =>
+      call(`${base(projectId)}/${encodeURIComponent(id)}/accept`, {
+        base_revision: baseRevision,
+        proposal: proposal.ref,
+        proposal_label: proposalLabel,
+        proposal_digest: proposal.digest,
+        label,
+        box: box ?? null,
+      }),
+  }),
   submit: (
     projectId: string,
     id: string,
@@ -179,55 +159,6 @@ export const cellcanvasApi = {
       `${base(projectId)}/${encodeURIComponent(id)}/operation`,
     ),
 };
-
-/** Voxels on the segment from `a` to `b` (inclusive, deduplicated), so a fast drag leaves no gaps. */
-export function strokeSegment(
-  a: [number, number, number],
-  b: [number, number, number],
-): [number, number, number][] {
-  const steps = Math.max(...a.map((v, i) => Math.abs(b[i] - v)));
-  const points: [number, number, number][] = [];
-  for (let s = 0; s <= steps; s++) {
-    const t = steps === 0 ? 0 : s / steps;
-    const p = a.map((v, i) => Math.round(v + (b[i] - v) * t)) as [
-      number,
-      number,
-      number,
-    ];
-    const last = points[points.length - 1];
-    if (!last || last.some((v, i) => v !== p[i])) points.push(p);
-  }
-  return points;
-}
-
-/** Split a stroke into requests within the server's per-request point bound. */
-export function chunkStroke(stroke: Stroke, maxPoints = 4096): Stroke[] {
-  const chunks: Stroke[] = [];
-  for (let i = 0; i < stroke.points.length; i += maxPoints)
-    chunks.push({ ...stroke, points: stroke.points.slice(i, i + maxPoints) });
-  return chunks;
-}
-
-/**
- * Whether the bound reconstruction is the opened one: same voxel grid and spacing. Painting is refused otherwise.
- * `axes` are the viewer's x, y, z axes in world units; `angstromPerUnit` converts them.
- */
-export function geometryMatches(
-  copick: BindingStatus["check"]["copick"],
-  axes: { size: number; scale: number; translation: number }[],
-  angstromPerUnit: number,
-): boolean {
-  const zyx = [...axes].reverse();
-  return zyx.every(
-    (axis, i) =>
-      axis.size === copick.shape[i] &&
-      Math.abs(axis.scale * angstromPerUnit - copick.scale_angstrom[i]) <
-        1e-3 &&
-      Math.abs(
-        axis.translation * angstromPerUnit - copick.translation_angstrom[i],
-      ) < 1e-2,
-  );
-}
 
 /** A new complete publication to display (not a repeat of one already shown, never an incomplete one). */
 export function newPublication(
