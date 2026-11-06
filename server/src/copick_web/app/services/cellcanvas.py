@@ -35,25 +35,16 @@ import httpx
 import numpy as np
 import zarr
 
+from .annotations import AnnotationError, Painting, SegmentationRef, record_proposal
+
 logger = logging.getLogger(__name__)
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
-MAX_STROKE_POINTS = 4096
-MAX_RADIUS_VOXELS = 64
 UNIT_ANGSTROM = {"angstrom": 1.0, "ångström": 1.0, "nanometer": 10.0, "nm": 10.0}
 
 
-class CellCanvasError(Exception):
-    def __init__(self, message: str, code: str, status: int = 409):
-        super().__init__(message)
-        self.code, self.status = code, status
-
-
-@dataclass(frozen=True)
-class SegmentationRef:
-    name: str
-    user_id: str
-    session_id: str
+class CellCanvasError(AnnotationError):
+    """A refused CellCanvas operation (``code`` and HTTP ``status`` are reported to the client)."""
 
 
 @dataclass
@@ -91,10 +82,7 @@ class Binding:
 
 
 def _segref(data: dict, what: str) -> SegmentationRef:
-    try:
-        return SegmentationRef(str(data["name"]), str(data["user_id"]), str(data["session_id"]))
-    except (KeyError, TypeError):
-        raise ValueError(f"{what} needs name, user_id and session_id") from None
+    return SegmentationRef.parse(data, what)
 
 
 def load_bindings(path: str | os.PathLike) -> list[Binding]:
@@ -162,6 +150,11 @@ class Session:
         self.binding = binding
         self.service = service
         self._client_factory = client_factory or (lambda: httpx.Client(timeout=30))
+        # The painting is an ordinary copick painting restricted to the bound classes; it shares the binding's lock
+        # with prediction publication.
+        self.painting = Painting(
+            service, binding.run, binding.voxel_size, binding.tomo_type, binding.painting, binding.classes, binding.lock
+        )
 
     # copick storage --------------------------------------------------------------------------------------------
 
@@ -185,40 +178,14 @@ class Session:
         )
         return segs[0] if segs else None
 
-    def _painting_array(self, create: bool, shape=None):
-        seg = self._segmentation(self.binding.painting)
-        if seg is None:
-            if not create:
-                return None, None
-            run = self.service.get_run(self.binding.run)
-            ref = self.binding.painting
-            seg = run.new_segmentation(
-                voxel_size=self.binding.voxel_size,
-                name=ref.name,
-                session_id=ref.session_id,
-                is_multilabel=True,
-                user_id=ref.user_id,
-                exist_ok=True,
-            )
-            seg.from_numpy(np.zeros(shape, dtype=np.uint8), levels=1, dtype=np.uint8)
-            group = zarr.open_group(seg.zarr(), mode="r+")
-            group.attrs["cellcanvas"] = {"role": "painting", "binding": self.binding.id, "revision": None}
-            self.service.clear_stores()
-        group = zarr.open_group(seg.zarr(), mode="r+")
-        return group, group["0"]
-
     def painting_state(self) -> dict:
-        group, array = self._painting_array(create=False)
-        if group is None:
-            return {"exists": False, "revision": None, "can_undo": False}
-        meta = group.attrs.get("cellcanvas") or {}
-        return {
-            "exists": True,
-            "revision": meta.get("revision"),
-            "shape": list(array.shape),
-            "dtype": str(array.dtype),
-            "can_undo": bool(meta.get("undo")),
-        }
+        return self.painting.state()
+
+    def paint(self, base_revision: Optional[str], strokes: list[dict], stroke_id: Optional[str] = None) -> dict:
+        return self.painting.paint(base_revision, strokes, stroke_id)
+
+    def undo(self, base_revision: Optional[str]) -> dict:
+        return self.painting.undo(base_revision)
 
     def published_state(self) -> dict:
         seg = self._segmentation(self.binding.prediction)
@@ -226,97 +193,6 @@ class Session:
             return {"exists": False}
         meta = zarr.open_group(seg.zarr(), mode="r").attrs.get("cellcanvas") or {}
         return {"exists": True, **meta}
-
-    def paint(self, base_revision: Optional[str], strokes: list[dict], stroke_id: Optional[str] = None) -> dict:
-        """Apply brush strokes (discs in one plane, voxel indices x, y, z) to the painting; returns the revision."""
-        geometry = self.tomogram_geometry()
-        shape = geometry["shape"]  # z, y, x
-        allowed = self.binding.class_ids | {0}
-        total = sum(len(s.get("points", [])) for s in strokes)
-        if not strokes or total == 0 or total > MAX_STROKE_POINTS:
-            raise CellCanvasError(f"Send 1-{MAX_STROKE_POINTS} stroke points.", "invalid_request", 400)
-        for stroke in strokes:
-            if int(stroke.get("label", -1)) not in allowed:
-                raise CellCanvasError("Stroke label is not a bound class (0 erases).", "invalid_request", 400)
-            radius = float(stroke.get("radius", 0))
-            if not 0 <= radius <= MAX_RADIUS_VOXELS:
-                raise CellCanvasError(f"Brush radius must be 0-{MAX_RADIUS_VOXELS} voxels.", "invalid_request", 400)
-            if stroke.get("plane") not in ("XY", "XZ", "YZ"):
-                raise CellCanvasError("Stroke plane must be XY, XZ or YZ.", "invalid_request", 400)
-        if not self.binding.lock.acquire(blocking=False):
-            raise CellCanvasError("Another painting save or publication is in progress.", "busy")
-        try:
-            group, array = self._painting_array(create=True, shape=shape)
-            if list(array.shape) != shape:
-                raise CellCanvasError("Painting shape differs from the reconstruction.", "geometry_mismatch")
-            meta = dict(group.attrs.get("cellcanvas") or {})
-            if base_revision != meta.get("revision"):
-                raise CellCanvasError("Painting changed since it was loaded; reload it.", "revision_conflict")
-            before = np.asarray(array[:])
-            after = before.copy()
-            for stroke in strokes:
-                _apply_stroke(after, stroke, shape)
-            indices = np.flatnonzero(before.ravel() != after.ravel())
-            if not len(indices):
-                return {"revision": base_revision, "changed_voxels": 0, "can_undo": bool(meta.get("undo"))}
-            history = list(meta.get("undo", []))
-            store = group.require_group("_cellcanvas_undo")
-            # An out-of-band writer invalidates history rather than being silently rolled back.
-            if history and store[history[-1]].attrs["digest"] != _painting_digest(before):
-                history = []
-            revision = uuid.uuid4().hex
-            entry = store.create_group(revision)
-            entry.create_dataset("indices", data=indices)
-            entry.create_dataset("before", data=before.ravel()[indices])
-            entry.attrs.update(digest=_painting_digest(after), stroke_id=stroke_id or revision)
-            history.append(revision)
-            # Retain up to 20 complete gestures (and cap pathological multi-request gestures).
-            while len({store[key].attrs["stroke_id"] for key in history}) > 20 or len(history) > 128:
-                oldest = store[history[0]].attrs["stroke_id"]
-                history = [key for key in history if store[key].attrs["stroke_id"] != oldest]
-            array[:] = after
-            meta.update(role="painting", binding=self.binding.id, revision=revision, undo=history)
-            group.attrs["cellcanvas"] = meta
-            for key in list(store.group_keys()):
-                if key not in history:
-                    del store[key]
-            return {"revision": revision, "changed_voxels": len(indices), "can_undo": bool(history)}
-        finally:
-            self.binding.lock.release()
-
-    def undo(self, base_revision: Optional[str]) -> dict:
-        """Restore one saved gesture, guarded by revision and exact current label bytes."""
-        if not self.binding.lock.acquire(blocking=False):
-            raise CellCanvasError("Another painting save or publication is in progress.", "busy")
-        try:
-            group, array = self._painting_array(create=False)
-            meta = dict(group.attrs.get("cellcanvas") or {}) if group is not None else {}
-            if base_revision != meta.get("revision"):
-                raise CellCanvasError("Painting changed since it was loaded; reload it.", "revision_conflict")
-            history = list(meta.get("undo", []))
-            if not history:
-                raise CellCanvasError("No saved stroke to undo.", "nothing_to_undo")
-            store = group["_cellcanvas_undo"]
-            before = np.asarray(array[:])
-            if store[history[-1]].attrs["digest"] != _painting_digest(before):
-                raise CellCanvasError("Painting was edited outside this session; undo refused.", "revision_conflict")
-            after = before.copy()
-            gesture = store[history[-1]].attrs["stroke_id"]
-            removed = []
-            while history and store[history[-1]].attrs["stroke_id"] == gesture:
-                key = history.pop()
-                entry = store[key]
-                after.ravel()[entry["indices"][:]] = entry["before"][:]
-                removed.append(key)
-            revision = uuid.uuid4().hex
-            array[:] = after
-            meta.update(revision=revision, undo=history)
-            group.attrs["cellcanvas"] = meta
-            for key in removed:
-                del store[key]
-            return {"revision": revision, "changed_voxels": int((before != after).sum()), "can_undo": bool(history)}
-        finally:
-            self.binding.lock.release()
 
     # core service ---------------------------------------------------------------------------------------------
 
@@ -443,11 +319,11 @@ class Session:
         if not self.binding.lock.acquire(blocking=False):
             raise CellCanvasError("A painting save is in progress; retry.", "busy")
         try:
-            group, array = self._painting_array(create=False)
+            group = self.painting._open(self.binding.painting)
             if group is None:
                 raise CellCanvasError("Paint at least one class before training.", "no_painting")
-            labels = np.asarray(array[...])
-            revision = (group.attrs.get("cellcanvas") or {}).get("revision")
+            labels = np.asarray(group["0"][...])
+            revision = self.painting.state()["revision"]
             if revision is None:
                 # Painted by another tool without a CellCanvas revision: identify it by content.
                 revision = "content-" + hashlib.sha256(labels.tobytes()).hexdigest()[:32]
@@ -559,7 +435,16 @@ class Session:
             write_ome_zarr_3d(
                 store, segmentation_pyramid(data.astype(np.uint8), self.binding.voxel_size, 1, dtype=np.uint8)
             )
-            zarr.open_group(store, mode="r+").attrs["cellcanvas"] = meta
+            staged = zarr.open_group(store, mode="r+")
+            staged.attrs["cellcanvas"] = meta
+            # Written into the staged store, so the record and the labels it describes are swapped in together.
+            meta["proposal"] = record_proposal(
+                staged,
+                "cellcanvas",
+                operation_id=pending["id"],
+                prediction_version=version,
+                classes=self.binding.classes,
+            )
             if final.exists():
                 os.replace(final, old)
             os.replace(staging, final)
@@ -592,41 +477,6 @@ class Session:
         if not root:
             raise CellCanvasError("Cannot locate the prediction store.", "unsupported_storage", 501)
         return Path(root)
-
-
-def _painting_digest(array: np.ndarray) -> str:
-    return hashlib.sha256(array.tobytes()).hexdigest()
-
-
-def _apply_stroke(array, stroke: dict, shape: list[int]) -> int:
-    """Paint discs of ``radius`` voxels around each point (x, y, z indices) in the stroke's plane."""
-    label = int(stroke["label"])
-    radius = float(stroke.get("radius", 0))
-    r = int(math.floor(radius))
-    points = np.asarray(stroke["points"], dtype=np.int64).reshape(-1, 3)[:, ::-1]  # -> z, y, x
-    # In-plane axes in z, y, x order.
-    in_plane = {"XY": (1, 2), "XZ": (0, 2), "YZ": (0, 1)}[stroke["plane"]]
-    lo = np.maximum(points.min(axis=0) - [r if a in in_plane else 0 for a in range(3)], 0)
-    hi = np.minimum(points.max(axis=0) + [r if a in in_plane else 0 for a in range(3)] + 1, shape)
-    if np.any(lo >= hi):
-        return 0
-    region = tuple(slice(int(a), int(b)) for a, b in zip(lo, hi, strict=True))
-    block = np.array(array[region], copy=True, order="C")
-    before = block.copy()
-    grid = np.indices(block.shape).reshape(3, -1).T + lo
-    mask = np.zeros(len(grid), dtype=bool)
-    a, b = in_plane
-    w = ({0, 1, 2} - set(in_plane)).pop()
-    for point in points:
-        if not (0 <= point[w] < shape[w]):
-            continue
-        near = (grid[:, w] == point[w]) & ((grid[:, a] - point[a]) ** 2 + (grid[:, b] - point[b]) ** 2 <= radius**2)
-        mask |= near
-    block.reshape(-1)[mask] = label
-    changed = int((block != before).sum())
-    if changed:
-        array[region] = block
-    return changed
 
 
 def open_session(binding: Binding, service: Any, client_factory=None) -> Session:

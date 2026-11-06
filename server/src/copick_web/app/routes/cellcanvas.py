@@ -12,7 +12,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..dependencies import WRITES, get_copick_service, get_registry
-from ..services.cellcanvas import MAX_STROKE_POINTS, Binding, CellCanvasError, open_session
+from ..services.annotations import MAX_STROKE_POINTS, AnnotationError
+from ..services.cellcanvas import Binding, open_session
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
 
@@ -40,7 +41,7 @@ def _session(binding_id: str, bindings, service, client_factory):
 async def _call(function, *args):
     try:
         return await run_in_threadpool(function, *args)
-    except CellCanvasError as error:
+    except AnnotationError as error:
         return JSONResponse({"detail": str(error), "code": error.code}, status_code=error.status)
 
 

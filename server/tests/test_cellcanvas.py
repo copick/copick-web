@@ -205,7 +205,11 @@ def test_status_reports_geometry_agreement_and_mismatch(make_app, service, core)
         assert status["check"]["ok"], status["check"]["problems"]
         assert status["check"]["copick"]["shape"] == list(SHAPE)
         assert status["check"]["copick"]["scale_angstrom"] == [VOXEL_SIZE] * 3
-        assert status["painting"] == {"exists": False, "revision": None, "can_undo": False}
+        assert {k: status["painting"][k] for k in ("exists", "revision", "can_undo")} == {
+            "exists": False,
+            "revision": None,
+            "can_undo": False,
+        }
         core.scale, core.shape = 1.0, [32, 32, 31]
         problems = c.get(f"{BASE}/ts1").json()["check"]["problems"]
         assert any("voxel size" in p for p in problems) and any("shape" in p for p in problems)
