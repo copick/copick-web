@@ -383,3 +383,14 @@ copick-web/
 ## License
 
 MIT
+
+### CellCanvas integration
+
+With a server-side binding file (`CELLCANVAS_BINDINGS`), a bound reconstruction shows a CellCanvas
+toolbar: paint semantic classes on the slices (erase returns voxels to unannotated), then **Train** and
+**Predict** in a loopback CellCanvas core service. Painting is saved as a copick segmentation, and only
+complete predictions are published and displayed. See [the CellCanvas web port map](docs/cellcanvas-web-port.md)
+for the binding format, geometry checks, operation receipts, a local preview script and limits. **Reload project**
+also refreshes segmentation pixels and derived surfaces written by another tool; it preserves
+navigation and display selection. Refresh only after the writer has completed its output.
+External data hosts must use revalidation or immutable release URLs.

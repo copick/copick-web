@@ -61,3 +61,33 @@ def test_reload_keeps_the_project_if_the_config_is_broken(client, service, demo_
         demo_config.write_text(good)
     assert client.post("/api/projects/demo/reload").status_code == 200
     assert service.root is not root
+
+
+def test_reload_reads_changed_segmentation_bytes(client, demo_config):
+    """A second process can replace pixels without changing segmentation identity."""
+    seg = next(
+        s
+        for s in client.get(f"/api/projects/demo/runs/{RUN}/segmentations").json()
+        if s.get("segmentation_type") == "binary"
+    )
+    url = "/" + seg["zarr_url"] + "/0/0.0.0"
+    before = client.get(url)
+    assert before.status_code == 200
+    assert before.headers["cache-control"] == "no-store"
+    other = copick.from_file(str(demo_config))
+    stored = next(
+        s
+        for s in other.get_run(RUN).segmentations
+        if s.name == seg["name"]
+        and s.user_id == seg["user_id"]
+        and s.session_id == seg["session_id"]
+        and not s.is_multilabel
+        and getattr(s, "segmentation_type", "binary") == "binary"
+    )
+    pixels = stored.numpy()
+    stored.from_numpy(np.ones_like(pixels))
+    assert client.post("/api/projects/demo/reload").status_code == 200
+    after = client.get(url + "?copick_revision=new")
+    assert after.status_code == 200
+    assert after.content != before.content
+    assert after.headers["cache-control"] == "no-store"
