@@ -4,6 +4,7 @@ The browser names a server-side binding by ID; service URLs and stores come from
 (``CELLCANVAS_BINDINGS`` or ``create_app(cellcanvas_bindings=...)``). Without one, the binding list is empty.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,6 +16,8 @@ from ..dependencies import WRITES, get_copick_service, get_registry
 from ..services.cellcanvas import MAX_STROKE_POINTS, Binding, CellCanvasError, open_session
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{project_id}/cellcanvas", tags=["cellcanvas"])
 
@@ -41,7 +44,8 @@ async def _call(function, *args):
     try:
         return await run_in_threadpool(function, *args)
     except CellCanvasError as error:
-        return JSONResponse({"detail": str(error), "code": error.code}, status_code=error.status)
+        logger.exception("CellCanvas operation failed with code=%s", error.code)
+        return JSONResponse({"detail": "CellCanvas operation failed", "code": error.code}, status_code=error.status)
 
 
 class Stroke(BaseModel):
