@@ -293,13 +293,21 @@ class Session:
             group = self.painting._open(self.binding.painting)
             if group is None:
                 raise CellCanvasError("Paint at least one class before training.", "no_painting")
-            labels = np.asarray(group["0"][...])
+            array = group["0"]
             revision = self.painting.state()["revision"]
+            # One chunk row of z planes at a time: memory follows the chunk size and the painted voxels.
+            content, plane, step = hashlib.sha256(), int(np.prod(array.shape[1:])), array.chunks[0]
+            flats, chunks = [], []
+            for z in range(0, array.shape[0], step):
+                slab = np.ascontiguousarray(array[z : z + step])
+                content.update(slab.tobytes())
+                where = np.flatnonzero(slab)
+                flats.append(where + z * plane)
+                chunks.append(slab.reshape(-1)[where])
+            flat, values = np.concatenate(flats), np.concatenate(chunks)
             if revision is None:
                 # Painted by another tool without a CellCanvas revision: identify it by content.
-                revision = "content-" + hashlib.sha256(labels.tobytes()).hexdigest()[:32]
-            flat = np.flatnonzero(labels)
-            values = labels.reshape(-1)[flat]
+                revision = "content-" + content.hexdigest()[:32]
             unknown = set(np.unique(values).tolist()) - self.binding.class_ids
             if unknown:
                 raise CellCanvasError(f"Painting contains unbound label IDs {sorted(unknown)}.", "invalid_painting")
