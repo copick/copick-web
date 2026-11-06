@@ -4,6 +4,7 @@ Classes are the project's objects (labels 1-255); 0 is unknown and erases. A Cel
 through its own routes, restricted to its classes.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request
@@ -15,6 +16,8 @@ from ..dependencies import WRITES, get_copick_service, get_registry
 from ..services.annotations import MAX_STROKE_POINTS, AnnotationError, Painting, SegmentationRef, project_classes
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{project_id}", tags=["annotations"])
 
@@ -69,11 +72,17 @@ def painting(target: Target, service: CopickService) -> Painting:
     )
 
 
+def refusal(error: AnnotationError) -> JSONResponse:
+    """Report a refused operation by its ``code``; the server-side message is logged, not sent to the browser."""
+    logger.warning("Annotation operation refused (code=%s): %s", error.code, error)
+    return JSONResponse({"detail": "Annotation operation refused", "code": error.code}, status_code=error.status)
+
+
 async def call(function, *args, **kwargs):
     try:
         return await run_in_threadpool(function, *args, **kwargs)
     except AnnotationError as error:
-        return JSONResponse({"detail": str(error), "code": error.code}, status_code=error.status)
+        return refusal(error)
 
 
 @router.get("/backends")

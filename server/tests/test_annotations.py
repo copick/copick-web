@@ -80,6 +80,7 @@ def test_painting_works_without_any_backend(client, service):
         f"{BASE}/painting/strokes", json={**TARGET, "base_revision": None, "strokes": [stroke(1, [[9, 9, 3]])]}
     )
     assert stale.status_code == 409 and stale.json()["code"] == "revision_conflict"
+    assert stale.json()["detail"] == "Annotation operation refused"  # server-side messages stay in the log
     bad = client.post(
         f"{BASE}/painting/strokes",
         json={**TARGET, "base_revision": first["revision"], "strokes": [stroke(9, [[1, 1, 1]])]},

@@ -16,6 +16,7 @@ resolution level 0 and must have exactly that grid. nnInteractive's own axes are
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from dataclasses import dataclass
 from typing import Optional
@@ -23,6 +24,8 @@ from typing import Optional
 import httpx
 
 from .annotations import AnnotationError, Painting, SegmentationRef, record_proposal, target_lock
+
+logger = logging.getLogger(__name__)
 
 PRODUCER = "nninteractive"
 
@@ -73,7 +76,8 @@ class NNInteractive:
             self._request("GET", "/health")
             return {"available": True}
         except AnnotationError as error:
-            return {"available": False, "error": str(error)}
+            logger.warning("nnInteractive server unavailable (code=%s): %s", error.code, error)
+            return {"available": False, "code": error.code}
 
     # sessions -------------------------------------------------------------------------------------------------
 

@@ -31,6 +31,41 @@ export class ApiError extends Error {
   }
 }
 
+/** What each refusal `code` from the annotation and CellCanvas routes means to the person painting. */
+const REFUSALS: Record<string, string> = {
+  geometry_mismatch:
+    "The painting or proposal is on a different voxel grid from this reconstruction.",
+  revision_conflict: "The painting or proposal changed since it was loaded.",
+  not_complete:
+    "That segmentation is not a completed proposal yet; wait for it to finish.",
+  nothing_to_undo: "Nothing to undo.",
+  busy: "Another save to this painting is in progress; try again in a moment.",
+  not_found:
+    "The reconstruction or proposal is no longer in the copick project.",
+  invalid_request:
+    "The edit was refused: check the class, brush size and proposal label.",
+  no_painting: "Paint at least one class before training.",
+  operation_pending: "Another operation is pending; wait for it to finish.",
+  operation_conflict:
+    "That operation ID was already used for different work; submit again.",
+  not_ready: "The completed prediction is no longer readable; predict again.",
+  invalid_prediction:
+    "The prediction has classes outside this binding's class range.",
+  unsupported_storage:
+    "Publishing the prediction needs a local copick overlay filesystem.",
+  service_unavailable: "The CellCanvas service is unreachable.",
+  backend_unavailable: "The nnInteractive server is unreachable.",
+  backend_error: "The nnInteractive server failed on this request.",
+  session_lost: "The nnInteractive session ended; start a new one.",
+  refused: "The nnInteractive server refused this prompt.",
+  unsupported_project: "nnInteractive needs a local copick project config.",
+};
+
+/** The message to show for a refusal: worded from its `code`, else the server's `detail`. */
+export function refusalMessage(code: string | undefined, detail: string) {
+  return (code && REFUSALS[code]) || detail;
+}
+
 export async function call<R>(
   url: string,
   body?: unknown,
@@ -55,7 +90,11 @@ export async function call<R>(
       typeof data?.detail === "string"
         ? data.detail
         : text || response.statusText;
-    throw new ApiError(response.status, data?.code, detail);
+    throw new ApiError(
+      response.status,
+      data?.code,
+      refusalMessage(data?.code, detail),
+    );
   }
   return data as R;
 }
@@ -154,7 +193,7 @@ export interface Backends {
   nninteractive: {
     available: boolean;
     needs_local_project?: boolean;
-    error?: string;
+    code?: string;
   };
 }
 

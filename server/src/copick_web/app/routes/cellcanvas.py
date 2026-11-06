@@ -8,7 +8,6 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..dependencies import WRITES, get_copick_service, get_registry
@@ -16,6 +15,7 @@ from ..services.annotations import MAX_STROKE_POINTS, AnnotationError, Segmentat
 from ..services.cellcanvas import Binding, open_session
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
+from .annotations import refusal
 
 router = APIRouter(prefix="/api/projects/{project_id}/cellcanvas", tags=["cellcanvas"])
 
@@ -42,7 +42,7 @@ async def _call(function, *args):
     try:
         return await run_in_threadpool(function, *args)
     except AnnotationError as error:
-        return JSONResponse({"detail": str(error), "code": error.code}, status_code=error.status)
+        return refusal(error)
 
 
 class Stroke(BaseModel):
@@ -153,8 +153,8 @@ async def accept(
     session = _session(binding_id, bindings, service, client_factory)
     try:
         ref = SegmentationRef.parse(body.proposal, "proposal")
-    except ValueError as error:
-        raise HTTPException(status_code=400, detail=str(error)) from None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Proposal needs name, user_id and session_id") from None
     return await _call(
         session.painting.accept,
         body.base_revision,
