@@ -43,14 +43,22 @@ export function binaryColorMap(color: Rgba255): LabelColorMapProps {
   };
 }
 
-/** A multilabel segmentation or panoptic label channel: each object label in its object's colour. */
+/**
+ * A multilabel segmentation or panoptic label channel: each object label in its object's colour, at the display
+ * opacity `alphaOf` gives it (default LABEL_ALPHA). Unknown (0) stays transparent.
+ */
 export function objectLabelColorMap(
-  objects: { label: number | null; color: Rgba255 }[],
+  objects: { name?: string; label: number | null; color: Rgba255 }[],
+  alphaOf: (label: number, name: string | undefined) => number = () =>
+    LABEL_ALPHA,
 ): LabelColorMapProps {
   const lookupTable = new Map<number, Rgba01>([[0, TRANSPARENT]]);
   for (const obj of objects) {
     if (obj.label !== null && obj.label !== 0)
-      lookupTable.set(obj.label, toLabelColor(obj.color));
+      lookupTable.set(
+        obj.label,
+        toLabelColor(obj.color, alphaOf(obj.label, obj.name)),
+      );
   }
   return { lookupTable, cycle: [TRANSPARENT] };
 }

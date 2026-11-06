@@ -1,4 +1,4 @@
-/** Navigate/Paint/Erase, class, brush radius, Undo and the latest message, for any painting. */
+/** Navigate/Paint/Erase, class, brush radius, label opacity, Undo and the latest message, for any painting. */
 
 import { useEffect, type ReactNode } from "react";
 import {
@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import type { PaintClass } from "@/api/annotations";
+import { LabelOpacityButton } from "./LabelOpacityButton";
 import type { Mode, usePainting } from "./usePainting";
 
 interface Props {
@@ -95,6 +96,7 @@ export function PaintControls({
             aria-label="Brush radius (voxels)"
           />
         </Box>
+        <LabelOpacityButton classes={classes} />
         <Button
           size="small"
           variant="outlined"

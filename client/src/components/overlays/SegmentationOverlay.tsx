@@ -37,6 +37,7 @@ import {
 import {
   segmentationKey,
   useCopick,
+  useProjectId,
   type SegmentationSelection,
 } from "@/contexts/CopickContext";
 import { useScene } from "@/contexts/SceneContext";
@@ -62,6 +63,11 @@ import {
   objectLabelColorMap,
   type LabelColorMapProps,
 } from "@/utils/labelColors";
+import {
+  labelOpacity,
+  meshLabelOpacity,
+  useLabelOpacities,
+} from "@/utils/labelOpacity";
 
 type Rgba = [number, number, number, number];
 type LabelSource = OmeZarrImageSource | ChannelViewSource;
@@ -239,7 +245,22 @@ function SegmentationLayers({
       }),
     [selection.hiddenIds, selection.soloId],
   );
-  const objectMap = useMemo(() => objectLabelColorMap(objects), [objects]);
+  const projectId = useProjectId();
+  const { saved: opacities } = useLabelOpacities(projectId);
+  const objectMap = useMemo(
+    () =>
+      objectLabelColorMap(objects, (label, name) =>
+        labelOpacity(opacities, label, name),
+      ),
+    [objects, opacities],
+  );
+  const meshObjectMap = useMemo(
+    () =>
+      objectLabelColorMap(objects, (label, name) =>
+        meshLabelOpacity(labelOpacity(opacities, label, name)),
+      ),
+    [objects, opacities],
+  );
   // Keyed by value: a fallback colour is a new array on every render.
   const objectColorKey = objectColor.join(",");
   const binaryMap = useMemo(
@@ -270,11 +291,11 @@ function SegmentationLayers({
     onPicked(value ? `${seg.name} #${value}` : null);
   };
 
-  const coloring: SurfaceColoring =
+  const coloringWith = (labels: LabelColorMapProps): SurfaceColoring =>
     type === "panoptic"
       ? [
           ...(selection.panopticMode !== "instances"
-            ? [{ channel: 0, map: objectMap }]
+            ? [{ channel: 0, map: labels }]
             : []),
           ...(selection.panopticMode !== "objects"
             ? [{ channel: 1, map: instanceMap }]
@@ -287,7 +308,7 @@ function SegmentationLayers({
               type === "instance"
                 ? instanceMap
                 : type === "multilabel"
-                  ? objectMap
+                  ? labels
                   : binaryMap,
           },
         ];
@@ -297,7 +318,7 @@ function SegmentationLayers({
         segKey={segKey}
         runName={runName}
         selection={selection}
-        coloring={coloring}
+        coloring={coloringWith(meshObjectMap)}
         loaders={loaders}
       />
     ) : (
@@ -305,7 +326,7 @@ function SegmentationLayers({
         segKey={segKey}
         runName={runName}
         selection={selection}
-        coloring={coloring}
+        coloring={coloringWith(objectMap)}
       />
     );
 
