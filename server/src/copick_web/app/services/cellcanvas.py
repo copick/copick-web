@@ -7,10 +7,16 @@ cannot choose service URLs or filesystem paths.
 
 The copick painting segmentation is the annotation of record: 0 is unannotated, positive IDs are the binding's
 classes (a background class must be explicit). Before training, it is copied sparsely into the core dataset with
-its revision. A prediction is published into copick only after the core reports a successful, current version:
-it is written to a staging directory and swapped into place, so readers see the previous complete prediction or the
-new complete one, never a partial write. Pending operation receipts are persisted beside the binding file, so an
-uncertain response or a page reload is reconciled with the same operation ID instead of starting new work.
+its revision. A prediction is published into copick only after the core reports a successful, current version.
+A whole-volume prediction is written to a staging directory and swapped into place, so readers see the previous
+complete prediction or the new complete one, never a partial write. A prediction of a region (for example the
+current slice of a full-resolution reconstruction) rewrites only the storage chunks that region touches: the
+publication is marked incomplete while they are written and complete again with their new checksums, so the client
+refreshes it only once complete and an accept refuses it in between; an interrupted write stays incomplete until the
+pending receipt is reconciled again, which rewrites the same chunks. Region predictions of the same model accumulate; one from a newer model
+first clears the chunks that hold the older model's labels, so the displayed prediction always comes from one model.
+Pending operation receipts are persisted beside the binding file, so an uncertain response or a page reload is
+reconciled with the same operation ID instead of starting new work.
 
 The core uses Zarr 3 and this server copick's Zarr 2; they share only HTTP and plain arrays.
 """
@@ -35,11 +41,25 @@ import httpx
 import numpy as np
 import zarr
 
-from .annotations import UNIT_ANGSTROM, AnnotationError, Painting, SegmentationRef, record_proposal
+from .annotations import (
+    UNIT_ANGSTROM,
+    AnnotationError,
+    Painting,
+    SegmentationRef,
+    _chunk_entry,
+    _xyz,
+    block_chunks,
+    chunk_aligned,
+    digest,
+    proposal_record,
+    record_proposal,
+)
 
 logger = logging.getLogger(__name__)
 
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
+AXES = ("z", "y", "x")
+PREDICTION_CHUNKS = (256, 256, 256)  # chunk size of a prediction store created by a region publication
 
 
 class CellCanvasError(AnnotationError):
@@ -241,8 +261,14 @@ class Session:
         temporary.write_text(json.dumps(state, indent=2))
         os.replace(temporary, path)
 
-    def submit(self, kind: str, operation_id: str) -> dict:
-        """Submit train or predict once per operation ID; a retry of the same ID returns its receipt."""
+    def submit(self, kind: str, operation_id: str, region: Optional[dict] = None) -> dict:
+        """Submit train or predict once per operation ID; a retry of the same ID returns its receipt.
+
+        ``region`` (predict only) is ``{"z": [start, stop], "y": ..., "x": ...}`` in voxel indices, half-open; missing
+        axes span the volume. Without it, or when it spans the whole volume, the whole volume is predicted.
+        """
+        if region is not None and kind != "predict":
+            raise CellCanvasError("Only predict takes a region.", "invalid_request", 400)
         try:
             operation_id = uuid.UUID(operation_id).hex
         except (TypeError, ValueError, AttributeError):
@@ -262,6 +288,7 @@ class Session:
         if not check["ok"]:
             raise CellCanvasError("; ".join(check["problems"]), "geometry_mismatch")
         service_id = check["core"]["service_id"]
+        region = _region(region, check["copick"]["shape"])
         if pending:
             if pending["service_id"] != service_id:
                 return self.reconcile()
@@ -269,12 +296,16 @@ class Session:
             if response.status_code == 200:
                 return self.reconcile()
         pending = {"id": operation_id, "kind": kind, "service_id": service_id, "submitted_at": time.time()}
+        if region is not None:
+            pending["region"] = region
         if kind == "train":
             pending["painting_revision"] = self._sync_painting(service_id, check["copick"]["shape"])
         # Persist before submitting: a lost response is then reconciled under the same ID.
         state["pending"] = pending
         self._write_state(state)
         body = {"operation_id": operation_id, "service_id": service_id}
+        if region is not None:  # whole-volume requests keep the original body, so cores without regions serve them
+            body["region"] = region
         response = self._core("POST", f"/{kind}", json=body)
         if response.status_code >= 400:
             data = response.json()
@@ -378,10 +409,21 @@ class Session:
         return {"pending": None, "last": outcome, "published": self.published_state()}
 
     def publish(self, result: dict, pending: dict) -> dict:
-        """Copy a completed core prediction into copick by staging and swapping the whole store."""
-        published = self.published_state()
-        if published.get("operation_id") == pending["id"] and published.get("complete"):
-            return published
+        """Copy a completed core prediction into copick: a region chunk-wise in place, a volume by a store swap.
+
+        Publications are serialized per binding; concurrent reconciles of one receipt publish it once.
+        """
+        if not self.binding.lock.acquire(timeout=30):
+            raise CellCanvasError("Another publication is in progress; retry.", "busy")
+        try:
+            published = self.published_state()
+            if published.get("operation_id") == pending["id"] and published.get("complete"):
+                return published
+            return self._publish(result, pending)
+        finally:
+            self.binding.lock.release()
+
+    def _publish(self, result: dict, pending: dict) -> dict:
         version = result["prediction_version"]
         response = self._core("GET", "/prediction", params={"version": version})
         if response.status_code != 200:
@@ -390,6 +432,13 @@ class Session:
         data = np.frombuffer(response.content, dtype=response.headers["x-dtype"]).reshape(shape)
         if data.size and data.max() > 255:
             raise CellCanvasError("Prediction classes exceed the bound class range.", "invalid_prediction")
+        grid = self.tomogram_geometry()["shape"]
+        lo, hi = [0, 0, 0], list(grid)
+        if response.headers.get("x-region"):
+            bounds = [[int(v) for v in part.split(":")] for part in response.headers["x-region"].split(",")]
+            lo, hi = [b[0] for b in bounds], [b[1] for b in bounds]
+        if [b - a for a, b in zip(lo, hi, strict=True)] != shape:
+            raise CellCanvasError("Prediction shape differs from its region.", "invalid_prediction")
         meta = {
             "role": "prediction",
             "binding": self.binding.id,
@@ -401,37 +450,131 @@ class Session:
             "features": self.binding.features,
             "published_at": time.time(),
         }
-        if not self.binding.lock.acquire(timeout=30):
-            raise CellCanvasError("Publication is blocked by a painting save; retry.", "busy")
-        try:
-            final = self._prediction_path()
-            staging = final.with_name(f".cellcanvas-staging-{pending['id']}")
-            old = final.with_name(f".cellcanvas-old-{pending['id']}")
-            shutil.rmtree(staging, ignore_errors=True)
-            from copick.util.ome import segmentation_pyramid, write_ome_zarr_3d
+        if lo != [0, 0, 0] or hi != grid:
+            return self._publish_region(data, lo, hi, grid, meta, pending)
+        final = self._prediction_path()
+        staging = final.with_name(f".cellcanvas-staging-{pending['id']}")
+        old = final.with_name(f".cellcanvas-old-{pending['id']}")
+        shutil.rmtree(staging, ignore_errors=True)
+        from copick.util.ome import segmentation_pyramid, write_ome_zarr_3d
 
-            store = zarr.DirectoryStore(str(staging), dimension_separator="/")  # chunk keys as copick writes
-            write_ome_zarr_3d(
-                store, segmentation_pyramid(data.astype(np.uint8), self.binding.voxel_size, 1, dtype=np.uint8)
-            )
-            staged = zarr.open_group(store, mode="r+")
-            staged.attrs["cellcanvas"] = meta
-            # Written into the staged store, so the record and the labels it describes are swapped in together.
-            meta["proposal"] = record_proposal(
-                staged,
-                "cellcanvas",
-                operation_id=pending["id"],
-                prediction_version=version,
-                classes=self.binding.classes,
-            )
-            if final.exists():
-                os.replace(final, old)
-            os.replace(staging, final)
-            shutil.rmtree(old, ignore_errors=True)
-            self.service.clear_stores()
-        finally:
-            self.binding.lock.release()
+        store = zarr.DirectoryStore(str(staging), dimension_separator="/")  # chunk keys as copick writes
+        write_ome_zarr_3d(
+            store, segmentation_pyramid(data.astype(np.uint8), self.binding.voxel_size, 1, dtype=np.uint8)
+        )
+        staged = zarr.open_group(store, mode="r+")
+        staged.attrs["cellcanvas"] = meta
+        # Written into the staged store, so the record and the labels it describes are swapped in together.
+        meta["proposal"] = record_proposal(
+            staged,
+            "cellcanvas",
+            operation_id=pending["id"],
+            prediction_version=version,
+            classes=self.binding.classes,
+        )
+        if final.exists():
+            os.replace(final, old)
+        os.replace(staging, final)
+        shutil.rmtree(old, ignore_errors=True)
+        self.service.clear_stores()
         return meta
+
+    def _publish_region(self, data, lo, hi, grid, meta, pending) -> dict:
+        """Write a region prediction into only the chunks it touches (and, after a model change, the stale ones)."""
+        meta["region"] = {axis: [a, b] for axis, a, b in zip(AXES, lo, hi, strict=True)}
+        group, created = self._region_store(grid)
+        array = group["0"]
+        previous = dict(group.attrs.get("cellcanvas") or {})
+        record = dict(group.attrs.get("proposal") or {})
+        chunks = dict(record.get("chunks") or {})
+        # Same model: keep its earlier regions. Otherwise clear every chunk holding an older model's labels.
+        same_model = bool(previous) and all(previous.get(k) == meta[k] for k in ("service_id", "painting_revision"))
+        stale = set() if same_model else {k for k, (_, present) in chunks.items() if present}
+        origin, end = chunk_aligned(lo, hi, grid, array.chunks)
+        inside = dict(block_chunks(origin, np.subtract(end, origin), array.chunks))
+        keys = sorted(set(inside) | stale)
+        # Readers and accepts refuse an incomplete publication while chunks are rewritten.
+        group.attrs.update(
+            cellcanvas={**previous, "complete": False, "writing": pending["id"]},
+            proposal={**record, "complete": False},
+        )
+        written = []
+        for key in keys:
+            start = [int(i) * c for i, c in zip(key.split("."), array.chunks, strict=True)]
+            stop = [min(s + c, n) for s, c, n in zip(start, array.chunks, grid, strict=True)]
+            box = tuple(slice(a, b) for a, b in zip(start, stop, strict=True))
+            # Only a chunk the same model predicted before keeps its voxels outside the region.
+            fresh = not (same_model and key in inside)
+            block = np.zeros(np.subtract(stop, start), np.uint8) if fresh else np.asarray(array[box])
+            if key in inside:
+                a = np.maximum(lo, start)
+                b = np.minimum(hi, stop)
+                block[tuple(slice(x - s, y - s) for x, y, s in zip(a, b, start, strict=True))] = data[
+                    tuple(slice(x - o, y - o) for x, y, o in zip(a, b, lo, strict=True))
+                ]
+            array[box] = block
+            chunks[key] = _chunk_entry(block)
+            written.append((start, stop))
+        regions = (previous.get("regions") or []) if same_model else []
+        meta["regions"] = [*regions, meta["region"]][-64:]  # the latest 64, for display
+        meta["changed_region"] = _xyz(np.min([w[0] for w in written], axis=0), np.max([w[1] for w in written], axis=0))
+        meta["chunks_written"] = len(written)
+        meta["new_store"] = created
+        proposal = proposal_record(
+            array,
+            chunks,
+            "cellcanvas",
+            operation_id=pending["id"],
+            prediction_version=meta["prediction_version"],
+            classes=self.binding.classes,
+        )
+        group.attrs.update(cellcanvas=meta, proposal=proposal)
+        self.service.clear_stores()
+        return {**meta, "proposal": proposal}
+
+    def _region_store(self, grid):
+        """The published prediction store, or (none yet, or another grid) a new empty one swapped into place."""
+        final = self._prediction_path()
+        if (final / ".zgroup").exists():
+            group = zarr.open_group(zarr.DirectoryStore(str(final), dimension_separator="/"), mode="r+")
+            if (
+                "0" in group
+                and list(group["0"].shape) == list(grid)
+                and "chunks" in (group.attrs.get("proposal") or {})
+            ):
+                return group, False
+        from copick.util.ome import write_ome_zarr_3d
+
+        staging = final.with_name(f".cellcanvas-staging-{uuid.uuid4().hex}")
+        old = final.with_name(f".cellcanvas-old-{uuid.uuid4().hex}")
+        store = zarr.DirectoryStore(str(staging), dimension_separator="/")
+        # The OME metadata of one level at the binding's voxel size; its array is replaced by an unwritten one, whose
+        # chunks read as 0 (unpredicted) until a region is published into them.
+        write_ome_zarr_3d(store, {self.binding.voxel_size: np.zeros((1, 1, 1), np.uint8)})
+        group = zarr.open_group(store, mode="r+")
+        compressor = group["0"].compressor
+        chunks = tuple(min(c, n) for c, n in zip(PREDICTION_CHUNKS, grid, strict=True))
+        group.create_dataset(
+            "0", shape=grid, chunks=chunks, dtype=np.uint8, fill_value=0, compressor=compressor, overwrite=True
+        )
+        array = group["0"]
+        empty: dict[tuple, str] = {}
+        records = {}
+        for key, sl in block_chunks((0, 0, 0), grid, array.chunks):
+            size = tuple(s.stop - s.start for s in sl)
+            if size not in empty:
+                empty[size] = digest(np.zeros(size, np.uint8))
+            records[key] = [empty[size], []]
+        group.attrs.update(
+            cellcanvas={"role": "prediction", "binding": self.binding.id, "complete": False, "regions": []},
+            proposal={**proposal_record(array, records, "cellcanvas"), "complete": False},
+        )
+        if final.exists():
+            os.replace(final, old)
+        os.replace(staging, final)
+        shutil.rmtree(old, ignore_errors=True)
+        self.service.clear_stores()
+        return zarr.open_group(zarr.DirectoryStore(str(final), dimension_separator="/"), mode="r+"), True
 
     def _prediction_path(self) -> Path:
         seg = self._segmentation(self.binding.prediction)
@@ -456,6 +599,28 @@ class Session:
         if not root:
             raise CellCanvasError("Cannot locate the prediction store.", "unsupported_storage", 501)
         return Path(root)
+
+
+def _region(region: Optional[dict], shape: list[int]) -> Optional[dict]:
+    """A predict region with every axis bounded, or None when it is absent or spans the whole volume."""
+    if region is None:
+        return None
+    if not isinstance(region, dict) or not region or set(region) - set(AXES):
+        raise CellCanvasError('region must map some of "z", "y", "x" to [start, stop].', "invalid_request", 400)
+    bounded = {}
+    for axis, size in zip(AXES, shape, strict=True):
+        bounds = region.get(axis, [0, size])
+        if (
+            not isinstance(bounds, (list, tuple))
+            or len(bounds) != 2
+            or not all(isinstance(b, int) and not isinstance(b, bool) for b in bounds)
+            or not 0 <= bounds[0] < bounds[1] <= size
+        ):
+            raise CellCanvasError(f"region {axis} must be [start, stop] within 0..{size}.", "invalid_request", 400)
+        bounded[axis] = [int(bounds[0]), int(bounds[1])]
+    if all(bounded[axis] == [0, size] for axis, size in zip(AXES, shape, strict=True)):
+        return None
+    return bounded
 
 
 def open_session(binding: Binding, service: Any, client_factory=None) -> Session:

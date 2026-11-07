@@ -73,6 +73,8 @@ class AcceptRequest(BaseModel):
 
 class OperationRequest(BaseModel):
     operation_id: str
+    # Predict only: {"z": [start, stop], "y": ..., "x": ...} voxel indices, half-open; missing axes are whole.
+    region: Optional[dict[str, list[int]]] = None
 
 
 @router.get("/bindings")
@@ -175,11 +177,14 @@ async def submit(
     service: CopickService = Depends(get_copick_service),
     client_factory=Depends(get_client_factory),
 ):
-    """Submit train (after syncing painting) or predict under a client-chosen operation ID; retries are idempotent."""
+    """Submit train (after syncing painting) or predict (optionally of a region) under a client-chosen operation ID.
+
+    Retries of the same ID are idempotent.
+    """
     if kind not in ("train", "predict"):
         raise HTTPException(status_code=404, detail="Unknown operation")
     session = _session(binding_id, bindings, service, client_factory)
-    return await _call(session.submit, kind, body.operation_id)
+    return await _call(session.submit, kind, body.operation_id, body.region)
 
 
 @router.get("/bindings/{binding_id}/operation")

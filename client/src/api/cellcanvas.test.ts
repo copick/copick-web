@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   chunkStroke,
   describeOperation,
+  describeRegion,
   geometryMatches,
   newPublication,
+  predictRegion,
   strokeSegment,
 } from "./cellcanvas";
 
@@ -85,5 +87,19 @@ describe("describeOperation", () => {
         last: { id: "1", kind: "train", state: "lost" },
       }),
     ).toMatch(/restarted/);
+  });
+});
+
+describe("predictRegion", () => {
+  it("predicts the shown slice, a slab clipped to the volume, or the whole volume", () => {
+    expect(predictRegion("slice", 120, 564)).toEqual({ z: [120, 121] });
+    expect(predictRegion("slab", 120, 564)).toEqual({ z: [112, 128] });
+    expect(predictRegion("slab", 3, 564)).toEqual({ z: [0, 16] });
+    expect(predictRegion("slab", 563, 564)).toEqual({ z: [548, 564] });
+    expect(predictRegion("slab", 2, 5)).toEqual({ z: [0, 5] });
+    expect(predictRegion("volume", 120, 564)).toBeNull();
+    expect(describeRegion({ z: [120, 121] })).toBe("slice z=120");
+    expect(describeRegion({ z: [112, 128] })).toBe("slices z=112–127");
+    expect(describeRegion(null)).toBe("volume");
   });
 });

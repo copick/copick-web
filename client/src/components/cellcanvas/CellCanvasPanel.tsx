@@ -3,7 +3,9 @@
  * painting is edited with the binding's classes and Train/Predict run in the shared core; otherwise the generic
  * `AnnotationPanel` is shown. Paint semantic classes on an ortho pane (erase returns voxels to unannotated), then
  * Train and Predict in the shared core. Each stroke is saved to the copick painting segmentation; a prediction is
- * displayed only after its complete publication, by the same refresh as Reload project.
+ * displayed only after its complete publication. Predict covers the current slice, a slab around it or (for volumes
+ * small enough) the whole volume; a region publication re-reads only the chunks it rewrote, a whole-volume one
+ * refreshes like Reload project.
  */
 
 import {
@@ -21,6 +23,8 @@ import {
   Button,
   Chip,
   CircularProgress,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -28,12 +32,18 @@ import { annotationsApi, type Saved } from "@/api/annotations";
 import {
   cellcanvasApi,
   describeOperation,
+  describeRegion,
   geometryMatches,
   newPublication,
   pendingOperation,
+  predictRegion,
+  SLAB_DEPTH,
+  WHOLE_VOLUME_VOXELS,
   type CellCanvasBinding,
   type OperationState,
+  type PredictExtent,
 } from "@/api/cellcanvas";
+import { worldToIndex } from "@/idetik/coordinates";
 import { refreshProjectData } from "@/api/projectRevision";
 import { useCopick, useProjectId } from "@/contexts/CopickContext";
 import { useScene } from "@/contexts/SceneContext";
@@ -82,6 +92,7 @@ function BindingPanel({
   const { scene } = useScene();
   const [operation, setOperation] = useState<OperationState | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  const [extent, setExtent] = useState<PredictExtent | null>(null);
   const shownPublication = useRef<string | null>(null);
   const seenResolved = useRef<string | null>(null);
   const pointHandler = useRef<
@@ -169,16 +180,39 @@ function BindingPanel({
     if (data) void Promise.resolve().then(() => adopt(data.operation, true));
   }, [status.data, adopt]);
 
-  // Display the latest complete publication; a new one reopens label sources first (never an incomplete one).
-  const publishedId = newPublication(null, operation?.published);
+  // Display the latest complete publication (never an incomplete one). A region publication re-reads only the
+  // chunks it rewrote; a whole-volume one (or a region publication that had to start a new store) swapped the
+  // store, so label sources are reopened.
+  const published = operation?.published;
+  const publishedId = newPublication(null, published);
   useEffect(() => {
     if (!publishedId || publishedId === shownPublication.current) return;
     shownPublication.current = publishedId;
     void (async () => {
-      await refreshProjectData(queryClient, projectId);
+      // Noting the region also lets the 3D isosurface keep its volume and later update only rewritten chunks.
+      if (published?.changed_region) {
+        await showSavedEdit(
+          queryClient,
+          projectId,
+          {
+            run: binding.run,
+            voxel_size: binding.voxel_size,
+            tomo_type: binding.tomo_type,
+            painting: binding.prediction,
+          },
+          {
+            revision: null,
+            can_undo: false,
+            changed_voxels: 1,
+            changed_region: published.changed_region,
+          },
+        );
+      }
+      if (!published?.changed_region || published.new_store)
+        await refreshProjectData(queryClient, projectId);
       showRef.current(binding.prediction);
     })();
-  }, [publishedId, binding.prediction, projectId, queryClient, showRef]);
+  }, [publishedId, published, binding, projectId, queryClient, showRef]);
 
   // Poll only while an operation is pending; each poll reconciles the same receipt.
   const pending = operation?.pending;
@@ -194,14 +228,34 @@ function BindingPanel({
     return () => window.clearInterval(timer);
   }, [pending, adopt, projectId, binding.id]);
 
+  const shapeZyx = status.data?.check.copick?.shape;
+  const voxels = shapeZyx ? shapeZyx.reduce((a, b) => a * b, 1) : 0;
+  const wholeAllowed = voxels > 0 && voxels <= WHOLE_VOLUME_VOXELS;
+  const chosenExtent: PredictExtent =
+    extent ?? (wholeAllowed ? "volume" : "slice");
+  const currentZ = () => {
+    const axis = scene?.geometry.axes[2];
+    const z = scene?.sliceCoords.z;
+    return axis && z != null ? worldToIndex(z, axis) : 0;
+  };
+
   const submit = async (kind: "train" | "predict") => {
     // Reuse a remembered ID: a response lost to a timeout or reload is retried, not resubmitted as new work.
     const remembered = pendingOperation.get(projectId, binding.id);
-    const id = remembered?.kind === kind ? remembered.id : crypto.randomUUID();
-    pendingOperation.set(projectId, binding.id, { id, kind });
+    const reuse = remembered?.kind === kind;
+    const id = reuse ? remembered.id : crypto.randomUUID();
+    const region =
+      kind !== "predict"
+        ? null
+        : reuse
+          ? (remembered.region ?? null)
+          : predictRegion(chosenExtent, currentZ(), shapeZyx?.[0] ?? 1);
+    pendingOperation.set(projectId, binding.id, { id, kind, region });
     setMessage(null);
     try {
-      await adopt(await cellcanvasApi.submit(projectId, binding.id, kind, id));
+      await adopt(
+        await cellcanvasApi.submit(projectId, binding.id, kind, id, region),
+      );
     } catch (e) {
       const error = e as Error & { code?: string; status?: number };
       if (error.code && error.code !== "service_unavailable")
@@ -295,10 +349,50 @@ function BindingPanel({
         >
           Predict
         </Button>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={chosenExtent}
+          onChange={(_, value: PredictExtent | null) =>
+            value && setExtent(value)
+          }
+          disabled={!geometryOk || busy}
+          data-testid="predict-extent"
+        >
+          <ToggleButton
+            value="slice"
+            sx={{ py: 0 }}
+            title="Predict the XY slice shown in the views"
+          >
+            Slice
+          </ToggleButton>
+          <ToggleButton
+            value="slab"
+            sx={{ py: 0 }}
+            title={`Predict ${SLAB_DEPTH} XY slices centred on the shown one`}
+          >
+            {SLAB_DEPTH} slices
+          </ToggleButton>
+          <ToggleButton
+            value="volume"
+            sx={{ py: 0 }}
+            disabled={!wholeAllowed}
+            title={
+              wholeAllowed
+                ? "Predict the whole volume"
+                : "Too large to predict at once; predict a slice or a slab"
+            }
+          >
+            Volume
+          </ToggleButton>
+        </ToggleButtonGroup>
         {busy && operation?.pending && <CircularProgress size={16} />}
         <Typography variant="caption" data-testid="cellcanvas-status">
           {opText}
           {stale ? " Painting changed since training." : ""}
+          {published?.regions && published.regions.length > 1
+            ? ` Shown: ${published.regions.map(describeRegion).join(", ")}.`
+            : ""}
         </Typography>
         {message && (
           <Alert

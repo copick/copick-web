@@ -424,11 +424,17 @@ class Painting:
         return group, record
 
     def proposal(self, ref: SegmentationRef) -> dict:
-        """A proposal's completion record and whether its stored labels still match it."""
+        """A proposal's completion record and whether the chunks holding its labels still match it."""
         group, record = self._completed(ref)
         array = group["0"]
         if "chunks" in record:
-            current = _chunk_record(array) == record["chunks"]
+            # The chunks that hold labels are the ones an accept can read; empty chunks are not reread.
+            labelled = {k for k, (_, present) in record["chunks"].items() if present}
+            current = all(
+                _chunk_entry(np.asarray(array[sl])) == record["chunks"][key]
+                for key, sl in block_chunks((0, 0, 0), array.shape, array.chunks)
+                if key in labelled
+            )
         else:  # recorded before chunk checksums
             current = digest(np.asarray(array[:])) == record.get("digest")
         summary = {k: v for k, v in record.items() if k != "chunks"}
@@ -514,31 +520,36 @@ class Painting:
         return {**result, "kept_human_voxels": kept.get("human", 0), "source": source}
 
 
+def _chunk_entry(block: np.ndarray) -> list:
+    """A chunk's record: a checksum of its labels and the nonzero labels it holds."""
+    if block.dtype == np.uint8:
+        present = np.flatnonzero(np.bincount(block.ravel(), minlength=256)[1:]) + 1
+    else:
+        present = np.unique(block[block != 0])
+    return [digest(block), [int(v) for v in present]]
+
+
 def _chunk_record(array) -> dict[str, list]:
     """Per storage chunk: a checksum of its labels and the nonzero labels it holds. Reads one chunk at a time."""
-    chunks = {}
-    for key, sl in block_chunks((0, 0, 0), array.shape, array.chunks):
-        block = np.asarray(array[sl])
-        if block.dtype == np.uint8:
-            present = np.flatnonzero(np.bincount(block.ravel(), minlength=256)[1:]) + 1
-        else:
-            present = np.unique(block[block != 0])
-        chunks[key] = [digest(block), [int(v) for v in present]]
-    return chunks
+    return {key: _chunk_entry(np.asarray(array[sl])) for key, sl in block_chunks((0, 0, 0), array.shape, array.chunks)}
 
 
-def record_proposal(group, producer: str, **details) -> dict:
-    """Mark a fully written segmentation as a completed proposal (call only after its write finished)."""
-    array = group["0"]
-    chunks = _chunk_record(array)
+def proposal_record(array, chunks: dict[str, list], producer: str, **details) -> dict:
+    """The completion record of a proposal whose chunk records are ``chunks``; the digest covers all of them."""
     identity = json.dumps({"shape": list(array.shape), "chunks": list(array.chunks), "labels": chunks}, sort_keys=True)
-    record = {
+    return {
         "complete": True,
         "producer": producer,
         "digest": hashlib.sha256(identity.encode()).hexdigest(),
         "chunks": chunks,
         **details,
     }
+
+
+def record_proposal(group, producer: str, **details) -> dict:
+    """Mark a fully written segmentation as a completed proposal (call only after its write finished)."""
+    array = group["0"]
+    record = proposal_record(array, _chunk_record(array), producer, **details)
     group.attrs["proposal"] = record
     return record
 
