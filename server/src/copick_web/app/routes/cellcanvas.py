@@ -4,20 +4,18 @@ The browser names a server-side binding by ID; service URLs and stores come from
 (``CELLCANVAS_BINDINGS`` or ``create_app(cellcanvas_bindings=...)``). Without one, the binding list is empty.
 """
 
-import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..dependencies import WRITES, get_copick_service, get_registry
-from ..services.cellcanvas import MAX_STROKE_POINTS, Binding, CellCanvasError, open_session
+from ..services.annotations import MAX_STROKE_POINTS, AnnotationError, SegmentationRef
+from ..services.cellcanvas import Binding, open_session
 from ..services.copick_service import CopickService
 from ..services.project_registry import ProjectRegistry
-
-logger = logging.getLogger(__name__)
+from .annotations import refusal
 
 router = APIRouter(prefix="/api/projects/{project_id}/cellcanvas", tags=["cellcanvas"])
 
@@ -43,9 +41,8 @@ def _session(binding_id: str, bindings, service, client_factory):
 async def _call(function, *args):
     try:
         return await run_in_threadpool(function, *args)
-    except CellCanvasError as error:
-        logger.exception("CellCanvas operation failed with code=%s", error.code)
-        return JSONResponse({"detail": "CellCanvas operation failed", "code": error.code}, status_code=error.status)
+    except AnnotationError as error:
+        return refusal(error)
 
 
 class Stroke(BaseModel):
@@ -65,8 +62,19 @@ class UndoRequest(BaseModel):
     base_revision: Optional[str] = None
 
 
+class AcceptRequest(BaseModel):
+    base_revision: Optional[str] = None
+    proposal: dict
+    proposal_label: int
+    proposal_digest: str
+    label: int
+    box: Optional[list[list[int]]] = Field(default=None, min_length=3, max_length=3)
+
+
 class OperationRequest(BaseModel):
     operation_id: str
+    # Predict only: {"z": [start, stop], "y": ..., "x": ...} voxel indices, half-open; missing axes are whole.
+    region: Optional[dict[str, list[int]]] = None
 
 
 @router.get("/bindings")
@@ -135,6 +143,31 @@ async def undo(
     return await _call(session.undo, body.base_revision)
 
 
+@router.post("/bindings/{binding_id}/accept", dependencies=WRITES)
+async def accept(
+    binding_id: str,
+    body: AcceptRequest,
+    bindings: list[Binding] = Depends(get_bindings),
+    service: CopickService = Depends(get_copick_service),
+    client_factory=Depends(get_client_factory),
+):
+    """Accept one label of a completed proposal (e.g. this binding's prediction) into the painting as a bound class."""
+    session = _session(binding_id, bindings, service, client_factory)
+    try:
+        ref = SegmentationRef.parse(body.proposal, "proposal")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Proposal needs name, user_id and session_id") from None
+    return await _call(
+        session.painting.accept,
+        body.base_revision,
+        ref,
+        body.proposal_label,
+        body.label,
+        body.proposal_digest,
+        body.box,
+    )
+
+
 @router.post("/bindings/{binding_id}/{kind}", dependencies=WRITES)
 async def submit(
     binding_id: str,
@@ -144,11 +177,14 @@ async def submit(
     service: CopickService = Depends(get_copick_service),
     client_factory=Depends(get_client_factory),
 ):
-    """Submit train (after syncing painting) or predict under a client-chosen operation ID; retries are idempotent."""
+    """Submit train (after syncing painting) or predict (optionally of a region) under a client-chosen operation ID.
+
+    Retries of the same ID are idempotent.
+    """
     if kind not in ("train", "predict"):
         raise HTTPException(status_code=404, detail="Unknown operation")
     session = _session(binding_id, bindings, service, client_factory)
-    return await _call(session.submit, kind, body.operation_id)
+    return await _call(session.submit, kind, body.operation_id, body.region)
 
 
 @router.get("/bindings/{binding_id}/operation")

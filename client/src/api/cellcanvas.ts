@@ -2,10 +2,21 @@
  * CellCanvas learning client: a server-side binding ties the opened copick reconstruction to a CellCanvas core
  * dataset. Painting is saved into a copick segmentation (0 = unannotated); train/predict run in the core under an
  * operation ID chosen here, so a lost response is retried with the same ID instead of starting new work. A
- * prediction is shown only after the server reports it published complete.
+ * prediction is shown only after the server reports it published complete. Predict can be limited to a region (the
+ * current slice or a slab around it): the core predicts only that region and the server rewrites only the storage
+ * chunks it touches, so a full-resolution reconstruction is predicted in seconds instead of a whole-volume run.
  */
 
 import { API_BASE } from "./client";
+import { call, type Box3, type Painter, type Stroke } from "./annotations";
+
+export {
+  ApiError as CellCanvasError,
+  chunkStroke,
+  geometryMatches,
+  strokeSegment,
+} from "./annotations";
+export type { Stroke } from "./annotations";
 
 export interface CellCanvasClass {
   id: number;
@@ -30,6 +41,9 @@ export interface CellCanvasBinding {
   features: Record<string, unknown>;
 }
 
+/** A predict region in z, y, x voxel indices, half-open; missing axes span the volume. */
+export type PredictRegion = Partial<Record<"z" | "y" | "x", [number, number]>>;
+
 export interface Publication {
   exists?: boolean;
   complete?: boolean;
@@ -37,6 +51,40 @@ export interface Publication {
   prediction_version?: number;
   painting_revision?: string | null;
   published_at?: number;
+  /** Region of the latest prediction (absent for a whole-volume one). */
+  region?: Required<PredictRegion>;
+  /** Regions of the current model shown together (each region prediction of the same model accumulates). */
+  regions?: Required<PredictRegion>[];
+  /** Voxel box (x, y, z) of the chunks the latest region publication rewrote. */
+  changed_region?: Box3;
+  /** The region publication started a new store (none before, or one of another format); reopen it. */
+  new_store?: boolean;
+}
+
+/** Which part of the volume Predict covers. */
+export type PredictExtent = "slice" | "slab" | "volume";
+
+/** Voxels above which Predict defaults to the current slice and whole-volume prediction is not offered. */
+export const WHOLE_VOLUME_VOXELS = 64 * 1024 * 1024;
+export const SLAB_DEPTH = 16;
+
+/** The region Predict sends: the slice at `z`, a `SLAB_DEPTH` slab centred on it, or nothing (the volume). */
+export function predictRegion(
+  extent: PredictExtent,
+  z: number,
+  depth: number,
+): PredictRegion | null {
+  if (extent === "volume") return null;
+  const half = extent === "slab" ? Math.floor(SLAB_DEPTH / 2) : 0;
+  const size = extent === "slab" ? Math.min(SLAB_DEPTH, depth) : 1;
+  const start = Math.max(0, Math.min(depth - size, z - half));
+  return { z: [start, start + size] };
+}
+
+export function describeRegion(region?: PredictRegion | null): string {
+  if (!region?.z) return "volume";
+  const [a, b] = region.z;
+  return b - a === 1 ? `slice z=${a}` : `slices z=${a}–${b - 1}`;
 }
 
 export interface OperationRecord {
@@ -51,6 +99,7 @@ export interface OperationRecord {
     | "not_submitted"
     | "rejected";
   painting_revision?: string | null;
+  region?: Required<PredictRegion>;
   error?: { message?: string; error?: string; code?: string } | string | null;
   publication?: Publication;
 }
@@ -83,52 +132,8 @@ export interface BindingStatus {
   operation: OperationState;
 }
 
-export interface Stroke {
-  label: number;
-  radius: number;
-  plane: "XY" | "XZ" | "YZ";
-  /** Voxel indices (x, y, z). */
-  points: [number, number, number][];
-}
-
-export class CellCanvasError extends Error {
-  constructor(
-    public readonly status: number,
-    public readonly code: string | undefined,
-    message: string,
-  ) {
-    super(message);
-    this.name = "CellCanvasError";
-  }
-}
-
 const base = (projectId: string) =>
   `${API_BASE}/projects/${encodeURIComponent(projectId)}/cellcanvas/bindings`;
-
-async function call<R>(url: string, body?: unknown): Promise<R> {
-  const response = await fetch(url, {
-    method: body === undefined ? "GET" : "POST",
-    headers:
-      body === undefined ? undefined : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    cache: "no-store",
-  });
-  const text = await response.text();
-  let data: { detail?: unknown; code?: string } | null = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    /* not JSON */
-  }
-  if (!response.ok) {
-    const detail =
-      typeof data?.detail === "string"
-        ? data.detail
-        : text || response.statusText;
-    throw new CellCanvasError(response.status, data?.code, detail);
-  }
-  return data as R;
-}
 
 export const cellcanvasApi = {
   list: (projectId: string, run: string, voxelSize: number, tomoType: string) =>
@@ -162,16 +167,33 @@ export const cellcanvasApi = {
       `${base(projectId)}/${encodeURIComponent(id)}/undo`,
       { base_revision: baseRevision },
     ),
+  /** The binding's painting, restricted to its classes (accepting also goes through the binding). */
+  painter: (projectId: string, id: string): Painter => ({
+    paint: (baseRevision, strokes, strokeId) =>
+      cellcanvasApi.paint(projectId, id, baseRevision, strokes, strokeId),
+    undo: (baseRevision) => cellcanvasApi.undo(projectId, id, baseRevision),
+    accept: (baseRevision, proposal, proposalLabel, label, box) =>
+      call(`${base(projectId)}/${encodeURIComponent(id)}/accept`, {
+        base_revision: baseRevision,
+        proposal: proposal.ref,
+        proposal_label: proposalLabel,
+        proposal_digest: proposal.digest,
+        label,
+        box: box ?? null,
+      }),
+  }),
   submit: (
     projectId: string,
     id: string,
     kind: "train" | "predict",
     operationId: string,
+    region?: PredictRegion | null,
   ) =>
     call<OperationState>(
       `${base(projectId)}/${encodeURIComponent(id)}/${kind}`,
       {
         operation_id: operationId,
+        ...(region ? { region } : {}),
       },
     ),
   operation: (projectId: string, id: string) =>
@@ -179,55 +201,6 @@ export const cellcanvasApi = {
       `${base(projectId)}/${encodeURIComponent(id)}/operation`,
     ),
 };
-
-/** Voxels on the segment from `a` to `b` (inclusive, deduplicated), so a fast drag leaves no gaps. */
-export function strokeSegment(
-  a: [number, number, number],
-  b: [number, number, number],
-): [number, number, number][] {
-  const steps = Math.max(...a.map((v, i) => Math.abs(b[i] - v)));
-  const points: [number, number, number][] = [];
-  for (let s = 0; s <= steps; s++) {
-    const t = steps === 0 ? 0 : s / steps;
-    const p = a.map((v, i) => Math.round(v + (b[i] - v) * t)) as [
-      number,
-      number,
-      number,
-    ];
-    const last = points[points.length - 1];
-    if (!last || last.some((v, i) => v !== p[i])) points.push(p);
-  }
-  return points;
-}
-
-/** Split a stroke into requests within the server's per-request point bound. */
-export function chunkStroke(stroke: Stroke, maxPoints = 4096): Stroke[] {
-  const chunks: Stroke[] = [];
-  for (let i = 0; i < stroke.points.length; i += maxPoints)
-    chunks.push({ ...stroke, points: stroke.points.slice(i, i + maxPoints) });
-  return chunks;
-}
-
-/**
- * Whether the bound reconstruction is the opened one: same voxel grid and spacing. Painting is refused otherwise.
- * `axes` are the viewer's x, y, z axes in world units; `angstromPerUnit` converts them.
- */
-export function geometryMatches(
-  copick: BindingStatus["check"]["copick"],
-  axes: { size: number; scale: number; translation: number }[],
-  angstromPerUnit: number,
-): boolean {
-  const zyx = [...axes].reverse();
-  return zyx.every(
-    (axis, i) =>
-      axis.size === copick.shape[i] &&
-      Math.abs(axis.scale * angstromPerUnit - copick.scale_angstrom[i]) <
-        1e-3 &&
-      Math.abs(
-        axis.translation * angstromPerUnit - copick.translation_angstrom[i],
-      ) < 1e-2,
-  );
-}
 
 /** A new complete publication to display (not a repeat of one already shown, never an incomplete one). */
 export function newPublication(
@@ -251,13 +224,15 @@ export function describeOperation(state: OperationState | undefined): string {
       : (op.error?.message ?? op.error?.error ?? "");
   switch (op.state) {
     case "running":
-      return `${what} running…`;
+      return op.kind === "predict"
+        ? `Predicting ${describeRegion(op.region)}…`
+        : `${what} running…`;
     case "unknown":
       return `${what} status unknown (service unreachable); will reconcile the same operation.`;
     case "succeeded":
       return op.kind === "train"
         ? "Model trained on the saved painting."
-        : `Prediction v${op.publication?.prediction_version ?? "?"} published.`;
+        : `Prediction v${op.publication?.prediction_version ?? "?"} of the ${describeRegion(op.publication?.region)} published.`;
     case "failed":
       return `${what} failed: ${error}. The previous published prediction is unchanged.`;
     case "lost":
@@ -269,14 +244,17 @@ export function describeOperation(state: OperationState | undefined): string {
   }
 }
 
-/** Remember an operation ID before submitting it, so a reload retries the same one. */
+interface Remembered {
+  id: string;
+  kind: "train" | "predict";
+  region?: PredictRegion | null;
+}
+
+/** Remember an operation (ID and region) before submitting it, so a reload retries the same one. */
 export const pendingOperation = {
   key: (projectId: string, bindingId: string) =>
     `cellcanvas-op:${projectId}:${bindingId}`,
-  get(
-    projectId: string,
-    bindingId: string,
-  ): { id: string; kind: "train" | "predict" } | null {
+  get(projectId: string, bindingId: string): Remembered | null {
     try {
       return JSON.parse(
         localStorage.getItem(this.key(projectId, bindingId)) ?? "null",
@@ -285,11 +263,7 @@ export const pendingOperation = {
       return null;
     }
   },
-  set(
-    projectId: string,
-    bindingId: string,
-    value: { id: string; kind: "train" | "predict" } | null,
-  ) {
+  set(projectId: string, bindingId: string, value: Remembered | null) {
     if (value)
       localStorage.setItem(
         this.key(projectId, bindingId),

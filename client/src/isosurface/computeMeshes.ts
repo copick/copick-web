@@ -5,7 +5,11 @@
 
 import type { ChunkLoaderLike } from "@/idetik/ChannelViewSource";
 import type { LabelVolume, MeshOptions, MeshResult } from "./mesher";
-import { readLabelVolume } from "./readLabelVolume";
+import {
+  readLabelVolume,
+  type ReadVolume,
+  type VolumeUpdate,
+} from "./readLabelVolume";
 
 export type { LabelMesh } from "./mesher";
 
@@ -16,20 +20,34 @@ export interface SegmentationMeshes extends MeshResult {
   /** The level read and the total coarsening (stored levels aside) the meshes were made at. */
   lod: number;
   factor: number;
+  /** The volume meshed, kept when asked so the next edit re-reads only its chunks. */
+  volume?: ReadVolume;
 }
 
-/** Mesh every value of a segmentation (one loader per channel). */
+/**
+ * Mesh every value of a segmentation (one loader per channel). With `update`, only the chunks inside its boxes are
+ * read again into a copy of its volume.
+ */
 export async function segmentationMeshes(
   loaders: ChunkLoaderLike[],
   signal: AbortSignal,
+  { keep = false, update }: { keep?: boolean; update?: VolumeUpdate } = {},
 ): Promise<SegmentationMeshes> {
-  const volume = await readLabelVolume(loaders, signal);
+  const volume = await readLabelVolume(loaders, signal, undefined, update);
+  const meshed = keep
+    ? { ...volume, channels: volume.channels.map((c) => c.slice()) }
+    : volume;
   const result = await inWorker(
-    volume,
+    meshed,
     { smooth: true, maxTriangles: MAX_TRIANGLES },
     signal,
   );
-  return { ...result, lod: volume.lod, factor: volume.factor * result.factor };
+  return {
+    ...result,
+    lod: volume.lod,
+    factor: volume.factor * result.factor,
+    ...(keep ? { volume } : {}),
+  };
 }
 
 function inWorker(

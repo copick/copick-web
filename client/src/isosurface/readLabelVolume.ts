@@ -20,6 +20,12 @@ export const MAX_VOXELS = 32_000_000;
 /** Chunks requested at once. */
 const CONCURRENCY = 6;
 
+/** A previously read volume and the finest-level voxel boxes changed since (`[[x0, x1], [y0, y1], [z0, z1]]`). */
+export interface VolumeUpdate {
+  volume: ReadVolume;
+  boxes: [number, number][][];
+}
+
 export interface ReadVolume extends LabelVolume {
   lod: number;
   /** Coarsening applied while reading (1 = the level as stored). */
@@ -34,6 +40,7 @@ export async function readLabelVolume(
   loaders: ChunkLoaderLike[],
   signal: AbortSignal,
   maxVoxels = MAX_VOXELS,
+  update?: VolumeUpdate,
 ): Promise<ReadVolume> {
   const dims = loaders[0].getSourceDimensionMap();
   if (!dims.z) throw new Error("The segmentation has no z axis");
@@ -50,12 +57,48 @@ export async function readLabelVolume(
   const chunk = levels.map((l) => l.chunkSize) as XYZ;
   const size = full.map((s) => Math.ceil(s / factor)) as XYZ;
   const counts = full.map((s, a) => Math.ceil(s / chunk[a]));
+  // An edit re-reads only its chunks into a copy of the last volume, when every chunk covers whole blocks.
+  const previous = update?.volume;
+  const incremental =
+    !!previous &&
+    previous.lod === lod &&
+    previous.factor === factor &&
+    previous.size.every((n, a) => n === size[a]) &&
+    chunk.every((c, a) => c % factor === 0 || counts[a] === 1);
+  const ranges = incremental
+    ? update!.boxes.map((box) =>
+        box.map(([lo, hi], a) => {
+          const finest = axes[a].lods[0];
+          const toLevel = (i: number) =>
+            (finest.translation + i * finest.scale - levels[a].translation) /
+            levels[a].scale;
+          return [
+            Math.max(0, Math.floor(toLevel(lo) / chunk[a])),
+            Math.min(counts[a], Math.ceil(toLevel(hi) / chunk[a])),
+          ];
+        }),
+      )
+    : [
+        [
+          [0, counts[0]],
+          [0, counts[1]],
+          [0, counts[2]],
+        ],
+      ];
+  const seen = new Set<string>();
   const jobs: XYZ[] = [];
-  for (let z = 0; z < counts[2]; z++)
-    for (let y = 0; y < counts[1]; y++)
-      for (let x = 0; x < counts[0]; x++) jobs.push([x, y, z]);
+  for (const [[x0, x1], [y0, y1], [z0, z1]] of ranges)
+    for (let z = z0; z < z1; z++)
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++)
+          if (!seen.has(`${x},${y},${z}`)) {
+            seen.add(`${x},${y},${z}`);
+            jobs.push([x, y, z]);
+          }
 
-  let channels: LabelArray[] | null = null;
+  let channels: LabelArray[] | null = incremental
+    ? previous!.channels.map((c) => c.slice())
+    : null;
   const read = async (index: XYZ) => {
     const start = index.map((i, a) => i * chunk[a]) as XYZ;
     const shape = start.map((s, a) => Math.min(chunk[a], full[a] - s)) as XYZ;
@@ -68,6 +111,7 @@ export async function readLabelVolume(
           size[0] * size[1] * size[2],
         ),
     );
+    if (incremental) clear(channels, size, factor, start, shape);
     place(channels, size, factor, data, start, shape);
   };
   let next = 0;
@@ -115,6 +159,23 @@ async function loadChunk(
   await loader.loadChunkData(chunk, signal);
   if (!chunk.data) throw new Error("A segmentation chunk did not load");
   return chunk.data;
+}
+
+/** Zero the blocks of one chunk before it is placed again (coarsening keeps maxima, so stale values would stay). */
+function clear(
+  dest: LabelArray[],
+  size: XYZ,
+  factor: number,
+  start: XYZ,
+  shape: XYZ,
+): void {
+  const [x0, y0, z0] = start.map((s) => Math.floor(s / factor));
+  const [x1, y1, z1] = start.map((s, a) => Math.ceil((s + shape[a]) / factor));
+  for (let z = z0; z < z1; z++)
+    for (let y = y0; y < y1; y++) {
+      const row = (z * size[1] + y) * size[0];
+      for (const d of dest) d.fill(0, row + x0, row + x1);
+    }
 }
 
 /** Copy one chunk (x fastest, cut to `shape`) into the volume, coarsened by `factor`. */

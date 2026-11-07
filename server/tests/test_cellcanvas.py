@@ -35,6 +35,8 @@ class FakeCore:
         self.trained = False
         self.predict_outcome = "succeeded"  # or "failed" / "running"
         self.posts = []
+        self.bodies = []
+        self.region = None  # slices of the latest prediction version, or None for the volume
 
     def describe(self):
         return {
@@ -62,11 +64,12 @@ class FakeCore:
             return httpx.Response(200, json={"painting_revision": self.revision})
         if path in ("/train", "/predict"):
             self.posts.append(path)
+            self.bodies.append(body)
             if body["service_id"] != self.service_id:
                 return httpx.Response(409, json={"error": "changed", "code": "service_changed"})
             op = uuid.UUID(body["operation_id"]).hex
             if op not in self.jobs:
-                self.jobs[op] = self._run(path[1:], op)
+                self.jobs[op] = self._run(path[1:], op, body.get("region"))
             return httpx.Response(202, json=self.jobs[op])
         if path.startswith("/operations/"):
             op = path.rsplit("/", 1)[1]
@@ -78,11 +81,14 @@ class FakeCore:
         if path == "/prediction":
             if self.status != "ready" or int(request.url.params["version"]) != self.version:
                 return httpx.Response(409, json={"error": "not ready", "code": "not_ready"})
+            data = self.prediction if self.region is None else self.prediction[self.region]
+            region = {} if self.region is None else {"X-Region": ",".join(f"{r.start}:{r.stop}" for r in self.region)}
             return httpx.Response(
                 200,
-                content=self.prediction.tobytes(),
+                content=np.ascontiguousarray(data).tobytes(),
                 headers={
-                    "X-Shape": ",".join(map(str, self.shape)),
+                    **region,
+                    "X-Shape": ",".join(map(str, data.shape)),
                     "X-Dtype": "int32",
                     "X-Prediction-Version": str(self.version),
                     "X-Painting-Revision": self.model_revision,
@@ -90,7 +96,7 @@ class FakeCore:
             )
         raise AssertionError(path)
 
-    def _run(self, kind, op):
+    def _run(self, kind, op, region=None):
         job = {"id": op, "operation": kind, "state": "succeeded", "error": None, "result": None}
         if kind == "train":
             self.trained, self.model_revision = True, self.revision
@@ -99,9 +105,15 @@ class FakeCore:
         if self.predict_outcome == "running":
             job["state"] = "running"
             return job
-        # Predict "paints" every voxel with the class at the label nearest along x, as a deterministic stand-in.
-        self.prediction[...] = 1
-        self.prediction[..., SHAPE[2] // 2 :] = 2
+        # Predict "paints" every voxel with the class at the label nearest along x, as a deterministic stand-in;
+        # a region prediction writes only the region.
+        self.region = (
+            None if region is None else tuple(slice(*region.get(a, [0, n])) for a, n in zip("zyx", SHAPE, strict=True))
+        )
+        stand_in = np.ones(SHAPE, "i4")
+        stand_in[..., SHAPE[2] // 2 :] = 2
+        where = self.region or (slice(None),) * 3
+        self.prediction[where] = stand_in[where]
         self.status = "writing"
         if self.predict_outcome == "failed":
             self.prediction[0, 0, 0] = 7  # partial write
@@ -205,7 +217,11 @@ def test_status_reports_geometry_agreement_and_mismatch(make_app, service, core)
         assert status["check"]["ok"], status["check"]["problems"]
         assert status["check"]["copick"]["shape"] == list(SHAPE)
         assert status["check"]["copick"]["scale_angstrom"] == [VOXEL_SIZE] * 3
-        assert status["painting"] == {"exists": False, "revision": None, "can_undo": False}
+        assert {k: status["painting"][k] for k in ("exists", "revision", "can_undo")} == {
+            "exists": False,
+            "revision": None,
+            "can_undo": False,
+        }
         core.scale, core.shape = 1.0, [32, 32, 31]
         problems = c.get(f"{BASE}/ts1").json()["check"]["problems"]
         assert any("voxel size" in p for p in problems) and any("shape" in p for p in problems)
@@ -272,7 +288,7 @@ def test_train_predict_publish_roundtrip_with_receipts(client, service, core):
     assert ms[0]["scale"] == [VOXEL_SIZE] * 3
     # The published prediction is served by the existing segmentation proxy, not cached.
     proxied = client.get(
-        f"/zarr/{PROJECT}/segmentation/multilabel/{RUN}/cellcanvas-prediction/cellcanvas/1/" f"{VOXEL_SIZE}/.zattrs"
+        f"/zarr/{PROJECT}/segmentation/multilabel/{RUN}/cellcanvas-prediction/cellcanvas/1/{VOXEL_SIZE}/.zattrs"
     )
     assert proxied.status_code == 200 and proxied.headers["cache-control"] == "no-store"
     assert proxied.json()["cellcanvas"]["operation_id"] == publication["operation_id"]
@@ -469,3 +485,188 @@ def test_undo_retains_twenty_gestures(client, service):
         revision = result["revision"]
     assert not result["can_undo"]
     assert painting_array(service)[6, 5, 3] == 2
+
+
+def test_published_prediction_is_a_proposal_accepted_into_unknown_voxels_only(client, service, core):
+    saved = client.post(
+        f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]], radius=1), stroke(2, [[28, 28, 3]], radius=1)]}
+    ).json()
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    predicted = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4())}).json()
+    record = predicted["last"]["publication"]["proposal"]
+    assert record["producer"] == "cellcanvas" and record["complete"]
+    proposal = {"name": "cellcanvas-prediction", "user_id": "cellcanvas", "session_id": "1"}
+    body = {
+        "base_revision": saved["revision"],
+        "proposal": proposal,
+        "proposal_label": 2,
+        "proposal_digest": record["digest"],
+        "label": 2,
+        "box": [[0, 32], [0, 32], [3, 4]],  # one z slice
+    }
+    accepted = client.post(f"{BASE}/ts1/accept", json=body)
+    assert accepted.status_code == 200, accepted.text
+    painted = painting_array(service)
+    assert accepted.json()["kept_human_voxels"] == 5  # the human class-2 stroke is kept as painted
+    assert painted[3, 3, 3] == 1  # the human background label left of the class boundary is untouched
+    assert (painted[3, :, 16:] == 2).all()
+    assert painted[5, 20, 20] == 0  # outside the box stays unknown
+    # A label outside the binding's classes is refused even though the project defines it.
+    refused = client.post(f"{BASE}/ts1/accept", json={**body, "base_revision": accepted.json()["revision"], "label": 3})
+    assert refused.status_code == 400
+
+
+def chunk_files(group):
+    """Written chunk keys of the prediction's level 0 (unwritten chunks read as 0)."""
+    import os
+
+    root = group.store.path if hasattr(group.store, "path") else group.store.dir_path()
+    level = os.path.join(root, "0")
+    return {
+        os.path.relpath(os.path.join(d, f), level).replace(os.sep, ".")
+        for d, _, files in os.walk(level)
+        for f in files
+        if not f.startswith(".")
+    }
+
+
+def test_region_prediction_publishes_only_its_chunks_and_accumulates_per_model(client, service, core, monkeypatch):
+    import copick_web.app.services.cellcanvas as cc
+
+    monkeypatch.setattr(cc, "PREDICTION_CHUNKS", (8, 8, 8))  # 4 x 4 x 4 chunks on the 32^3 fixture
+    client.post(f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]]), stroke(2, [[28, 28, 3]])]})
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    predicted = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [3, 4]}})
+    assert predicted.status_code == 200, predicted.text
+    assert core.bodies[-1]["region"] == {"z": [3, 4], "y": [0, 32], "x": [0, 32]}
+    publication = predicted.json()["last"]["publication"]
+    assert publication["complete"] and publication["region"] == {"z": [3, 4], "y": [0, 32], "x": [0, 32]}
+    assert publication["changed_region"] == [[0, 32], [0, 32], [0, 8]] and publication["chunks_written"] == 16
+    group = prediction_group(service)
+    labels = group["0"][:]
+    np.testing.assert_array_equal(labels[3], core.prediction[3])
+    assert not labels[:3].any() and not labels[4:].any()
+    assert chunk_files(group) == {f"0.{y}.{x}" for y in range(4) for x in range(4)}
+    # The same model's next region accumulates; the first region and untouched chunks stay as they were.
+    second = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [20, 22]}})
+    publication = second.json()["last"]["publication"]
+    assert publication["chunks_written"] == 16 and len(publication["regions"]) == 2
+    labels = prediction_group(service)["0"][:]
+    assert labels[3].all() and labels[20:22].all() and not labels[4:20].any()
+    assert len(chunk_files(prediction_group(service))) == 32
+    # Inspecting and accepting read the chunks that hold labels; the record is the region-updated one.
+    proposal = {"name": "cellcanvas-prediction", "user_id": "cellcanvas", "session_id": "1"}
+    inspected = client.get(
+        f"/api/projects/{PROJECT}/painting/proposal",
+        params={
+            "run": RUN,
+            "voxel_size": VOXEL_SIZE,
+            "tomo_type": "wbp",
+            "name": "cellcanvas-painting",
+            "user_id": "cellcanvas",
+            "session_id": "1",
+            "proposal_name": proposal["name"],
+            "proposal_user_id": proposal["user_id"],
+            "proposal_session_id": proposal["session_id"],
+        },
+    )
+    assert inspected.status_code == 200, inspected.text
+    assert inspected.json()["current"] and inspected.json()["digest"] == publication["proposal"]["digest"]
+    # A newer model clears the older model's chunks before writing its region.
+    saved = client.post(
+        f"{BASE}/ts1/painting", json={"base_revision": core.revision, "strokes": [stroke(1, [[3, 3, 12]])]}
+    ).json()
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    third = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [12, 13]}})
+    publication = third.json()["last"]["publication"]
+    assert publication["painting_revision"] == saved["revision"] and publication["regions"] == [publication["region"]]
+    labels = prediction_group(service)["0"][:]
+    assert labels[12].all() and not np.delete(labels, 12, axis=0).any()
+    assert publication["chunks_written"] == 48  # z chunk 1 written, z chunks 0 and 2 cleared
+
+
+def test_region_publication_accepts_into_unknown_voxels_and_undoes_exactly(client, service, core):
+    saved = client.post(
+        f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]], radius=1), stroke(2, [[28, 28, 3]], radius=1)]}
+    ).json()
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    predicted = client.post(
+        f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [2, 5]}}
+    ).json()
+    record = predicted["last"]["publication"]["proposal"]
+    before = painting_array(service)
+    body = {
+        "base_revision": saved["revision"],
+        "proposal": {"name": "cellcanvas-prediction", "user_id": "cellcanvas", "session_id": "1"},
+        "proposal_label": 2,
+        "proposal_digest": record["digest"],
+        "label": 2,
+        "box": [[0, 32], [0, 32], [0, 32]],  # wider than the predicted region
+    }
+    accepted = client.post(f"{BASE}/ts1/accept", json=body)
+    assert accepted.status_code == 200, accepted.text
+    painted = painting_array(service)
+    changed = painted != before
+    assert (before[changed] == 0).all() and (painted[changed] == 2).all()  # only unknown voxels, as class 2
+    assert changed[2:5].any() and not changed[:2].any() and not changed[5:].any()  # only inside the region
+    assert painted[3, 3, 3] == 1 and accepted.json()["kept_human_voxels"] == 5
+    undone = client.post(f"{BASE}/ts1/undo", json={"base_revision": accepted.json()["revision"]})
+    assert undone.status_code == 200 and undone.json()["undone"]["kind"] == "accepted_proposal"
+    np.testing.assert_array_equal(painting_array(service), before)
+
+
+def test_interrupted_region_publication_is_refused_then_completed_by_reconcile(client, service, core, monkeypatch):
+    import copick_web.app.services.cellcanvas as cc
+
+    client.post(f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]]), stroke(2, [[28, 28, 3]])]})
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    real = cc._chunk_entry
+
+    def crash(block):
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(cc, "_chunk_entry", crash)
+    with pytest.raises(OSError):
+        client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [3, 4]}})
+    group = prediction_group(service)
+    assert group.attrs["cellcanvas"]["complete"] is False and group.attrs["proposal"]["complete"] is False
+    monkeypatch.setattr(cc, "_chunk_entry", real)
+    resolved = client.get(f"{BASE}/ts1/operation").json()
+    assert resolved["last"]["state"] == "succeeded" and resolved["published"]["complete"]
+    np.testing.assert_array_equal(prediction_group(service)["0"][3], core.prediction[3])
+
+
+def test_region_requests_are_validated(client, service, core):
+    client.post(f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]]), stroke(2, [[28, 28, 3]])]})
+    bad = client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4()), "region": {"z": [0, 1]}})
+    assert bad.status_code == 400
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    for region in ({"z": [4, 4]}, {"z": [0, 33]}, {"t": [0, 1]}, {}):
+        refused = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": region})
+        assert refused.status_code == 400, region
+    # A region spanning the whole volume is a whole-volume prediction (no region sent to the core).
+    whole = client.post(f"{BASE}/ts1/predict", json={"operation_id": str(uuid.uuid4()), "region": {"z": [0, 32]}})
+    assert whole.status_code == 200 and "region" not in core.bodies[-1]
+    assert "region" not in whole.json()["last"]["publication"]
+
+
+def test_concurrent_reconciles_publish_a_region_once(client, service, core):
+    import threading
+
+    client.post(f"{BASE}/ts1/painting", json={"strokes": [stroke(1, [[3, 3, 3]]), stroke(2, [[28, 28, 3]])]})
+    client.post(f"{BASE}/ts1/train", json={"operation_id": str(uuid.uuid4())})
+    core.predict_outcome = "running"
+    op = uuid.uuid4()
+    client.post(f"{BASE}/ts1/predict", json={"operation_id": str(op), "region": {"z": [3, 4]}})
+    # The core finishes; two polls (e.g. the submit response and the 1 s poll) reconcile the receipt at once.
+    core.region = (slice(3, 4), slice(0, 32), slice(0, 32))
+    core.prediction[3] = 2
+    core.version, core.status = core.version + 1, "ready"
+    core.jobs[op.hex].update(state="succeeded", result={"status": "success", "prediction_version": core.version})
+    threads = [threading.Thread(target=client.get, args=(f"{BASE}/ts1/operation",)) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    meta = prediction_group(service).attrs["cellcanvas"]
+    assert meta["complete"] and meta["regions"] == [{"z": [3, 4], "y": [0, 32], "x": [0, 32]}]

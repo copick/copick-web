@@ -157,3 +157,57 @@ describe("readLabelVolume", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("readLabelVolume after an edit", () => {
+  test("re-reads only the edited chunks and equals a full read, erases included", async () => {
+    // 16x8x8 in 4^3 chunks, single level, coarsened by 2 (512 voxels allowed).
+    const size: [number, number, number] = [16, 8, 8];
+    const data = new Uint16Array(16 * 8 * 8);
+    const at = (x: number, y: number, z: number) => (z * 8 + y) * 16 + x;
+    data[at(1, 1, 1)] = 3;
+    data[at(9, 5, 2)] = 2;
+    const loader = fakeLoader([{ size, data }], 4);
+    const first = await readLabelVolume(
+      [loader],
+      new AbortController().signal,
+      512,
+    );
+    expect(first.factor).toBe(2);
+    const before = first.channels[0].slice();
+    // Erase in chunk (0, 0, 0) and paint in chunk (2, 1, 0).
+    data[at(1, 1, 1)] = 0;
+    data[at(10, 6, 3)] = 1;
+    loader.requests = 0;
+    const edited = await readLabelVolume(
+      [loader],
+      new AbortController().signal,
+      512,
+      {
+        volume: first,
+        boxes: [
+          [
+            [1, 2],
+            [1, 2],
+            [1, 2],
+          ],
+          [
+            [10, 11],
+            [6, 7],
+            [3, 4],
+          ],
+        ],
+      },
+    );
+    expect(loader.requests).toBe(2);
+    const full = await readLabelVolume(
+      [loader],
+      new AbortController().signal,
+      512,
+    );
+    expect(Array.from(edited.channels[0])).toEqual(
+      Array.from(full.channels[0]),
+    );
+    // The previous volume is left as it was.
+    expect(Array.from(first.channels[0])).toEqual(Array.from(before));
+  });
+});

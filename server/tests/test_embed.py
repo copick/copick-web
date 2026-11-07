@@ -207,3 +207,29 @@ def test_cli_read_only(monkeypatch, demo_config):
     result = CliRunner().invoke(cli.main, [str(demo_config), "--no-browser"], env={"READ_ONLY": None})
     assert result.exit_code == 0, result.output
     assert served["app"].state.read_only is False
+
+
+def test_host_task_edits_a_fixed_painting_and_reads_its_revision(demo_config):
+    """examples/annotation_task.py: the host fixes the painting and records the revision it accepts on submission."""
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).parents[1] / "examples" / "annotation_task.py"
+    spec = importlib.util.spec_from_file_location("annotation_task", path)
+    example = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(example)
+    host, editor = example.build_host(str(demo_config), "TS_001", 10.0, "wbp", "annotator7", "task42")
+    assert editor.endswith("?paint_name=painting&paint_user=annotator7&paint_session=task42")
+    pid = editor.split("/projects/")[1].split("/")[0]
+    target = {
+        "run": "TS_001",
+        "voxel_size": 10.0,
+        "tomo_type": "wbp",
+        "painting": {"name": "painting", "user_id": "annotator7", "session_id": "task42"},
+    }
+    stroke = {"label": 2, "radius": 1, "plane": "XY", "points": [[5, 5, 3]]}
+    with TestClient(host) as client:
+        assert client.get("/tasks/task42").json()["exists"] is False
+        saved = client.post(f"/copick-web/api/projects/{pid}/painting/strokes", json={**target, "strokes": [stroke]})
+        assert saved.status_code == 200
+        assert client.get("/tasks/task42").json()["revision"] == saved.json()["revision"]
