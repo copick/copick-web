@@ -167,6 +167,17 @@ export interface Saved {
   revision: string | null;
   changed_voxels: number;
   can_undo: boolean;
+  /** Voxel box the save changed (absent when nothing changed). */
+  changed_region?: Box3 | null;
+}
+
+/** Smallest box holding both (either may be absent). */
+export function unionBox(a?: Box3 | null, b?: Box3 | null): Box3 | null {
+  if (!a || !b) return a ?? b ?? null;
+  return a.map(([lo, hi], i) => [
+    Math.min(lo, b[i][0]),
+    Math.max(hi, b[i][1]),
+  ]) as Box3;
 }
 
 export interface ProposalRecord {

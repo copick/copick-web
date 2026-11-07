@@ -40,7 +40,7 @@ import {
   useProjectId,
   type SegmentationSelection,
 } from "@/contexts/CopickContext";
-import { useScene } from "@/contexts/SceneContext";
+import { useScene, useViewerRuntime } from "@/contexts/SceneContext";
 import { useLayout } from "@/contexts/LayoutContext";
 import { useLatestRef } from "@/utils/useLatestRef";
 import {
@@ -51,6 +51,11 @@ import { ChannelViewSource } from "@/idetik/ChannelViewSource";
 import { PLANES, VIEW_IDS, type Plane } from "@/idetik/coordinates";
 import { isAbortError, withSceneSignal } from "@/idetik/lifecycle";
 import { sourcePolicy } from "@/idetik/policy";
+import {
+  EditableLabelSource,
+  labelSourceKey,
+  registerLabelSource,
+} from "@/idetik/labelRefresh";
 import { usePerViewportLayers } from "@/components/viewer/usePerViewportLayers";
 import { SurfacePointsLayer } from "@/idetik/SurfacePointsLayer";
 import { MeshObjectsLayer } from "@/idetik/MeshObjectsLayer";
@@ -74,6 +79,8 @@ type LabelSource = OmeZarrImageSource | ChannelViewSource;
 
 interface OpenedSource {
   base: OmeZarrImageSource;
+  /** Reads the base store for the isosurfaces, outside idetik's chunk tracking. */
+  reader: ChunkLoaderLike;
   /** Panoptic: [label channel, instance channel]. */
   channels: ChannelViewSource[] | null;
   maxLod: number;
@@ -191,19 +198,38 @@ function SegmentationLayers({
   >(null);
   const opened = openedFor?.key === sourceKey ? openedFor : null;
 
+  const projectId = useProjectId();
+  const runtime = useLatestRef(useViewerRuntime());
   useEffect(() => {
     let alive = true;
+    let unregister = () => {};
     const abort = new AbortController();
     (async () => {
       const base = await OmeZarrImageSource.fromHttp({ url });
       if (!alive) return;
       const load = base.loader.loadChunkData.bind(base.loader);
-      base.loader.loadChunkData = async (chunk, signal) => {
+      const read: typeof load = async (chunk, signal) => {
         if (!alive) throw new DOMException("Layer hidden", "AbortError");
         return withSceneSignal(abort.signal, signal, (combined) =>
           load(chunk, combined),
         );
       };
+      // Saved edits re-read the chunks they changed in place (paintings are multilabel, never panoptic).
+      const editable =
+        type !== "panoptic" && runName
+          ? new EditableLabelSource(
+              base.loader,
+              read,
+              () => runtime.current?.idetik.requestRender(),
+              abort.signal,
+            )
+          : null;
+      base.loader.loadChunkData = editable?.load ?? read;
+      if (editable)
+        unregister = registerLabelSource(
+          labelSourceKey(projectId, runName!, segKey),
+          editable,
+        );
       const channelCount = base.getChannelCount();
       let channels: ChannelViewSource[] | null = null;
       if (type === "panoptic") {
@@ -222,6 +248,11 @@ function SegmentationLayers({
       setOpened({
         key: sourceKey,
         base,
+        reader: {
+          getSourceDimensionMap: () => base.loader.getSourceDimensionMap(),
+          getBytesPerElement: () => base.loader.getBytesPerElement(),
+          loadChunkData: read,
+        },
         channels,
         maxLod: Math.max(0, base.getDimensions().numLods - 1),
       });
@@ -230,9 +261,10 @@ function SegmentationLayers({
     });
     return () => {
       alive = false;
+      unregister();
       abort.abort();
     };
-  }, [url, type, segKey, sourceKey, setStatus]);
+  }, [url, type, segKey, sourceKey, setStatus, projectId, runName, runtime]);
 
   const objectColor: Rgba = objects.find((o) => o.name === seg.name)?.color ??
     seg.color ?? [255, 0, 0, 255];
@@ -245,7 +277,6 @@ function SegmentationLayers({
       }),
     [selection.hiddenIds, selection.soloId],
   );
-  const projectId = useProjectId();
   const { saved: opacities } = useLabelOpacities(projectId);
   const objectMap = useMemo(
     () =>
@@ -273,7 +304,7 @@ function SegmentationLayers({
   const loaders = useMemo<ChunkLoaderLike[] | null>(
     () =>
       opened
-        ? (opened.channels?.map((c) => c.loader) ?? [opened.base.loader])
+        ? (opened.channels?.map((c) => c.loader) ?? [opened.reader])
         : null,
     [opened],
   );

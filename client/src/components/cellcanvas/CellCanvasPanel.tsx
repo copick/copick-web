@@ -24,7 +24,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { annotationsApi } from "@/api/annotations";
+import { annotationsApi, type Saved } from "@/api/annotations";
 import {
   cellcanvasApi,
   describeOperation,
@@ -44,6 +44,7 @@ import {
   useShowSegmentation,
   type PointHandler,
 } from "@/components/annotation/ProposalTools";
+import { showSavedEdit } from "@/components/annotation/showEdit";
 import { usePainting } from "@/components/annotation/usePainting";
 import { useLatestRef } from "@/utils/useLatestRef";
 
@@ -110,10 +111,26 @@ function BindingPanel({
     );
   const show = useShowSegmentation(binding.voxel_size);
   const showRef = useLatestRef(show);
-  const refresh = useCallback(async () => {
-    await refreshProjectData(queryClient, projectId);
-    showRef.current(binding.painting);
-  }, [binding.painting, projectId, queryClient, showRef]);
+  const refresh = useCallback(
+    async (saved?: Saved) => {
+      await showSavedEdit(
+        queryClient,
+        projectId,
+        {
+          run: binding.run,
+          voxel_size: binding.voxel_size,
+          tomo_type: binding.tomo_type,
+          painting: binding.painting,
+        },
+        saved,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: ["cellcanvas-status", projectId, binding.id],
+      });
+      showRef.current(binding.painting);
+    },
+    [binding, projectId, queryClient, showRef],
+  );
   const painter = useMemo(
     () => cellcanvasApi.painter(projectId, binding.id),
     [projectId, binding.id],

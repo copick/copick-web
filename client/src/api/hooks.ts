@@ -9,11 +9,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MeshSource } from "@idetik/core";
 import type { ChunkLoaderLike } from "@/idetik/ChannelViewSource";
-import { segmentationMeshes } from "@/isosurface/computeMeshes";
+import {
+  segmentationMeshes,
+  type SegmentationMeshes,
+} from "@/isosurface/computeMeshes";
+import {
+  labelEditsSince,
+  labelSourceKey,
+  settleLabelEdits,
+} from "@/idetik/labelRefresh";
 import { api } from "./client";
 import { refreshProjectData, revisionKey } from "./projectRevision";
 import { clearThumbnails } from "@/components/gallery/thumbnails";
-import { useProjectId } from "@/contexts/CopickContext";
+import { segmentationKey, useProjectId } from "@/contexts/CopickContext";
 import { canEdit } from "@/utils/readOnly";
 import type {
   CreatePicksRequest,
@@ -348,6 +356,8 @@ export function useMeshGeometry(
  * A segmentation's isosurfaces (one mesh per value), computed in the browser from the store the 2D layers read.
  * `loaders`: the source's chunk loader, or one per channel of a panoptic segmentation.
  */
+type EditedMeshes = SegmentationMeshes & { editSeq: number };
+
 export function useSegmentationMeshes(
   runName: string | null,
   seg: {
@@ -361,6 +371,7 @@ export function useSegmentationMeshes(
   enabled: boolean,
 ) {
   const projectId = useProjectId();
+  const queryClient = useQueryClient();
   const revision = useProjectRevision();
   return useQuery({
     queryKey: [
@@ -374,7 +385,22 @@ export function useSegmentationMeshes(
       seg?.voxelSize,
       revision,
     ],
-    queryFn: ({ signal }) => segmentationMeshes(loaders!, signal),
+    // After a saved edit only the chunks it changed are read again (see `showSavedEdit`).
+    queryFn: async ({ signal, queryKey }) => {
+      const key = labelSourceKey(projectId, runName!, segmentationKey(seg!));
+      const last = queryClient.getQueryData<EditedMeshes>(queryKey);
+      const edits = labelEditsSince(key, last?.editSeq ?? 0);
+      const boxes = last?.volume ? edits?.boxes : null;
+      const result: EditedMeshes = {
+        ...(await segmentationMeshes(loaders!, signal, {
+          keep: !!edits,
+          update: boxes ? { volume: last!.volume!, boxes } : undefined,
+        })),
+        editSeq: edits?.seq ?? 0,
+      };
+      if (edits) settleLabelEdits(key, edits.seq);
+      return result;
+    },
     enabled: enabled && !!runName && !!seg && !!loaders,
     staleTime: Infinity,
     gcTime: 60_000,

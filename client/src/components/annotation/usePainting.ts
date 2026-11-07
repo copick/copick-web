@@ -21,7 +21,9 @@ import {
   type Painter,
   type PaintingState,
   type ProposalRecord,
+  type Saved,
   type Stroke,
+  unionBox,
 } from "@/api/annotations";
 import { useScene } from "@/contexts/SceneContext";
 import {
@@ -47,8 +49,8 @@ interface Options {
   state: PaintingState | undefined;
   /** Re-read the painting after a refused save. */
   reload: () => Promise<unknown>;
-  /** Show the saved labels (reopen label sources and display the painting layer). */
-  refresh: () => Promise<void>;
+  /** Show the saved labels: what `saved` changed, or (without it, after a refusal) everything. */
+  refresh: (saved?: Saved) => Promise<void>;
   enabled: boolean;
   /** Another operation (e.g. training) blocks edits. */
   blocked?: boolean;
@@ -87,7 +89,7 @@ export function usePainting({
 
   /** Run one revision-checked change; a refusal re-reads the painting. */
   const change = useCallback(
-    async <R extends { revision: string | null; can_undo: boolean }>(
+    async <R extends Saved>(
       run: (base: string | null) => Promise<R>,
     ): Promise<R | null> => {
       if (editing.current) return null;
@@ -99,7 +101,7 @@ export function usePainting({
         revisionRef.current = saved.revision;
         setRevision(saved.revision);
         setCanUndo(saved.can_undo);
-        await refresh();
+        await refresh(saved);
         return saved;
       } catch (e) {
         const error = e as Error & { code?: string };
@@ -126,10 +128,19 @@ export function usePainting({
     (stroke: Stroke) =>
       change(async (base) => {
         const strokeId = crypto.randomUUID();
-        let saved = { revision: base, changed_voxels: 0, can_undo: canUndo };
+        let saved: Saved = {
+          revision: base,
+          changed_voxels: 0,
+          can_undo: canUndo,
+        };
         for (const chunk of chunkStroke(stroke)) {
-          saved = await painter.paint(saved.revision, [chunk], strokeId);
-          revisionRef.current = saved.revision;
+          const part = await painter.paint(saved.revision, [chunk], strokeId);
+          revisionRef.current = part.revision;
+          saved = {
+            ...part,
+            changed_voxels: saved.changed_voxels + part.changed_voxels,
+            changed_region: unionBox(saved.changed_region, part.changed_region),
+          };
         }
         if (stroke.label !== 0) setLastStroke(stroke);
         return saved;

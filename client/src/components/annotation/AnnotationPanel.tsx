@@ -20,6 +20,7 @@ import {
   geometryMatches,
   hostPaintingRef,
   type PaintTarget,
+  type Saved,
   type SegmentationRef,
 } from "@/api/annotations";
 import { refreshProjectData } from "@/api/projectRevision";
@@ -31,7 +32,9 @@ import {
   useShowSegmentation,
   type PointHandler,
 } from "./ProposalTools";
+import { showSavedEdit } from "./showEdit";
 import { usePainting } from "./usePainting";
+import { useLatestRef } from "@/utils/useLatestRef";
 
 interface Props {
   paneRefs: MutableRefObject<(HTMLDivElement | null)[]>;
@@ -75,10 +78,20 @@ export function AnnotationPanel({ paneRefs }: Props) {
     !!scene &&
     geometryMatches(grid, scene.geometry.axes, scene.geometry.angstromPerUnit);
   const show = useShowSegmentation(voxelSize ?? 0);
-  const refresh = useCallback(async () => {
-    await refreshProjectData(queryClient, projectId);
-    show(ref);
-  }, [projectId, queryClient, ref, show]);
+  const targetRef = useLatestRef(target);
+  const refresh = useCallback(
+    async (saved?: Saved) => {
+      const at = targetRef.current;
+      if (at) {
+        await showSavedEdit(queryClient, projectId, at, saved);
+        void queryClient.invalidateQueries({
+          queryKey: ["painting", projectId, at],
+        });
+      } else await refreshProjectData(queryClient, projectId);
+      show(ref);
+    },
+    [projectId, queryClient, ref, show, targetRef],
+  );
   const painter = useMemo(
     () => (target ? annotationsApi.painter(projectId, target) : null),
     [projectId, target],
