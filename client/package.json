@@ -19,7 +19,7 @@
     "@kitware/vtk.js": "38.0.4",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
-    "@tanstack/react-query": "^5.105.3",
+    "@tanstack/react-query": "^5.107.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"
