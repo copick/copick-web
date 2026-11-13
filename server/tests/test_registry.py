@@ -53,8 +53,14 @@ def service_account(monkeypatch):
 # --- Where the configuration file is ---
 
 
-def test_config_file_is_under_the_overlay_root(service_account):
-    body = json.dumps({"config_type": "filesystem", "overlay_root": f"local://{HPC}"})
+# Both spellings of a cluster-local root that producers publish: Embrella's copick step writes local://, the portal
+# insitu_import pipeline writes a bare absolute path.
+CLUSTER_LOCAL_ROOTS = pytest.mark.parametrize("overlay_root", [f"local://{HPC}", HPC], ids=["local://", "bare path"])
+
+
+@CLUSTER_LOCAL_ROOTS
+def test_config_file_is_under_the_overlay_root(service_account, overlay_root):
+    body = json.dumps({"config_type": "filesystem", "overlay_root": overlay_root})
     config_file = pr.registry_config_file(_entry(), body)
     assert config_file.path == f"{HPC}/config.json"
     assert str(config_file) == f"svc@192.168.98.229:{HPC}/config.json"
@@ -66,8 +72,9 @@ def test_config_file_is_under_the_overlay_root(service_account):
         (_entry(config_url="https://elsewhere.example.org/config.json"), f"local://{HPC}"),
         (_entry(root_url=None), f"local://{HPC}"),
         (_entry(), "s3://bucket/run001"),
+        (_entry(), "relative/run001"),
     ],
-    ids=["config not under root_url", "no root_url", "overlay not local://"],
+    ids=["config not under root_url", "no root_url", "overlay on another filesystem", "relative overlay"],
 )
 def test_config_file_read_only_when_the_layout_does_not_match(service_account, entry, overlay_root):
     body = json.dumps({"config_type": "filesystem", "overlay_root": overlay_root})
@@ -78,6 +85,39 @@ def test_config_file_read_only_without_a_service_account(monkeypatch):
     monkeypatch.setattr(pr.settings, "slurm_user", None)
     body = json.dumps({"config_type": "filesystem", "overlay_root": f"local://{HPC}"})
     assert pr.registry_config_file(_entry(), body) is None
+
+
+# --- Reaching cluster-local roots over SSH ---
+
+
+@CLUSTER_LOCAL_ROOTS
+def test_cluster_local_roots_are_reached_over_ssh(service_account, overlay_root):
+    body = json.dumps(
+        {"config_type": "filesystem", "overlay_root": overlay_root, "overlay_fs_args": {"auto_mkdir": True}}
+    )
+    cfg = json.loads(pr._rewrite_overlay_root(body, _entry()))
+    assert cfg["overlay_root"] == f"ssh://{HPC}"
+    assert cfg["overlay_fs_args"]["username"] == "svc"
+    assert cfg["overlay_fs_args"]["host"] == "192.168.98.229"
+
+
+@pytest.mark.parametrize("overlay_root", ["s3://bucket/run001", f"ssh://{HPC}", "relative/run001"])
+def test_roots_not_on_the_cluster_are_left_alone(service_account, overlay_root):
+    body = json.dumps({"config_type": "filesystem", "overlay_root": overlay_root})
+    assert pr._rewrite_overlay_root(body, _entry()) == body
+
+
+def test_local_projects_are_never_reached_over_ssh(service_account, demo_config):
+    """A local project's bare absolute overlay root is opened from this machine's disk, even with a service account."""
+    cfg = json.loads(demo_config.read_text())
+    cfg["overlay_root"] = cfg["overlay_root"].removeprefix("local://")
+    assert cfg["overlay_root"].startswith("/")
+    demo_config.write_text(json.dumps(cfg))
+
+    registry = pr.ProjectRegistry()
+    service = registry.get_service(registry.register_local(str(demo_config)))
+    assert service.root.config.overlay_root == cfg["overlay_root"]
+    assert RUN in {run.name for run in service.root.runs}
 
 
 # --- Editing object types in a remote configuration file ---

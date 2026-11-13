@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 
 import copick
 import pytest
+
+from copick_web.app.services.config_file import LocalConfigFile
 
 URL = "/api/projects/demo/object-types"
 
@@ -122,14 +123,12 @@ def test_stale_version_is_a_conflict(client, demo_config):
     assert "other" not in demo_config.read_text()
 
 
-def test_read_only_config(client, demo_config):
-    os.chmod(demo_config, 0o444)
-    try:
-        body, _ = _types(client)
-        assert body["editable"] is False
-        assert client.post(URL, json=_payload(body["version"])).status_code == 403
-    finally:
-        os.chmod(demo_config, 0o644)
+def test_read_only_config(client, monkeypatch):
+    # Patched rather than chmod'd 444
+    monkeypatch.setattr(LocalConfigFile, "writable", lambda self: False)
+    body, _ = _types(client)
+    assert body["editable"] is False
+    assert client.post(URL, json=_payload(body["version"])).status_code == 403
 
 
 def test_edits_on_disk_are_picked_up_and_other_settings_kept(client, demo_config):
