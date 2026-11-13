@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/copick/copick-web/compare/server-v0.1.8...server-v0.1.9) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** consolidate Dependabot updates; copick 1.32, vtk.js 38.0.9 ([#151](https://github.com/copick/copick-web/issues/151)) ([7d59a9b](https://github.com/copick/copick-web/commit/7d59a9b13bd2f92fc253a97e492f50e0df827a12))
+* registry overlay root ([#149](https://github.com/copick/copick-web/issues/149)) ([ba15ef3](https://github.com/copick/copick-web/commit/ba15ef3c827e56cedd63322aed99b235d711b05f))
+
 ## [0.1.8](https://github.com/copick/copick-web/compare/server-v0.1.7...server-v0.1.8) (2026-11-03)
 
 
