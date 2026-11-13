@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0-alpha.6](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.5...client-v1.0.0-alpha.6) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** consolidate Dependabot updates; copick 2.0.0a7, vtk.js 38.0.9 (Zarr v3) ([#152](https://github.com/copick/copick-web/issues/152)) ([12f5d1a](https://github.com/copick/copick-web/commit/12f5d1add35e0c9a52e61d4baa439d31aff6a9ea))
+
 ## [1.0.0-alpha.5](https://github.com/copick/copick-web/compare/client-v1.0.0-alpha.4...client-v1.0.0-alpha.5) (2026-11-03)
 
 
