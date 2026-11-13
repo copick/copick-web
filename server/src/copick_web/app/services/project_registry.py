@@ -10,8 +10,8 @@
 
     1. GET ``entry.config_url`` -> raw copick JSON (via
        ``RegistryClient.fetch_config_json``).
-    2. ``_rewrite_overlay_root`` rewrites ``local://`` overlay/static
-       roots to ``ssh://`` and injects a service-account SSH config
+    2. ``_rewrite_overlay_root`` rewrites ``local://`` (or bare ``/``)
+       overlay/static roots to ``ssh://`` and injects a service-account SSH config
        (``SLURM_USER`` / ``SLURM_KEYFILE``, host from ``cluster_id``).
        This lets the server write to HPC-local overlays it can't see
        directly. Only registry projects hit this path.
@@ -102,10 +102,20 @@ _LOCAL_SCHEME = "local://"
 _SSH_SCHEME = "ssh://"
 
 
-def _swap_local_to_ssh(value: Optional[str]) -> Optional[str]:
-    if isinstance(value, str) and value.startswith(_LOCAL_SCHEME):
-        return _SSH_SCHEME + value[len(_LOCAL_SCHEME) :]
+def _cluster_path(value: Optional[str]) -> Optional[str]:
+    """Path on the cluster for a ``local://`` or bare absolute root (producers write either); None otherwise."""
+    if not isinstance(value, str):
+        return None
+    if value.startswith(_LOCAL_SCHEME):
+        return value[len(_LOCAL_SCHEME) :]
+    if value.startswith("/"):
+        return value
     return None
+
+
+def _swap_local_to_ssh(value: Optional[str]) -> Optional[str]:
+    path = _cluster_path(value)
+    return None if path is None else _SSH_SCHEME + path
 
 
 def _ssh_args(entry: ProjectEntry) -> Optional[dict]:
@@ -129,10 +139,10 @@ def _ssh_args(entry: ProjectEntry) -> Optional[dict]:
 def _rewrite_overlay_root(config_body: str, entry: ProjectEntry) -> str:
     """Rewrite registry configs so HPC-local roots are reached over SSH.
 
-    Registry-published configs embed `local://` paths that the server
-    container can't see. When `SLURM_USER` and `SLURM_KEYFILE` are
-    configured, we swap the `local://` scheme on overlay_root (and
-    static_root) for `ssh://` and inject service-account SSH params into
+    Registry-published configs embed `local://` (or bare `/`) paths that the
+    server container can't see. When `SLURM_USER` and `SLURM_KEYFILE` are
+    configured, we swap them on overlay_root (and static_root) for
+    `ssh://` and inject service-account SSH params into
     the matching fs_args. The SSH host is taken from ``entry.cluster_id``.
     Only registry projects hit this path; local projects materialize via
     ``from_config_path`` and are never rewritten.
@@ -198,12 +208,13 @@ def registry_config_file(entry: ProjectEntry, config_body: str) -> Optional[Remo
         overlay_root = json.loads(config_body).get("overlay_root")
     except (json.JSONDecodeError, AttributeError):
         return None
-    if not isinstance(overlay_root, str) or not overlay_root.startswith(_LOCAL_SCHEME):
-        logger.info("Object types of %s are read-only: overlay_root %s is not local://", pid, overlay_root)
+    overlay_path = _cluster_path(overlay_root)
+    if overlay_path is None:
+        logger.info("Object types of %s are read-only: overlay_root %s is not cluster-local", pid, overlay_root)
         return None
 
     relative = config_url[len(root_url.rstrip("/")) + 1 :]
-    path = f"{overlay_root[len(_LOCAL_SCHEME):].rstrip('/')}/{relative}"
+    path = f"{overlay_path.rstrip('/')}/{relative}"
 
     def open_fs():
         from sshfs import SSHFileSystem
