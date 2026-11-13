@@ -16,7 +16,7 @@
     "@emotion/react": "^11.13.0",
     "@emotion/styled": "^11.13.0",
     "@idetik/core": "0.52.0",
-    "@kitware/vtk.js": "38.0.4",
+    "@kitware/vtk.js": "38.0.9",
     "@mui/icons-material": "^9.5.0",
     "@mui/material": "^9.5.0",
     "@tanstack/react-query": "^5.107.1",
