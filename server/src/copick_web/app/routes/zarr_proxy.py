@@ -185,6 +185,6 @@ async def _proxy_segmentation(
         content=data,
         media_type=content_type,
         headers={
-            "Cache-Control": "public, max-age=3600",
+            "Cache-Control": "no-store",
         },
     )

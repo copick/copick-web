@@ -6,6 +6,7 @@
  * visible view and read the shared crosshair.
  */
 
+import { CellCanvasPanel } from "@/components/cellcanvas/CellCanvasPanel";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Chip } from "@mui/material";
 import { LayoutProvider, useLayout } from "@/contexts/LayoutContext";
@@ -246,6 +247,7 @@ function TomogramViewerContent({ zarrUrl }: { zarrUrl: string }) {
         <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
           {editable && <PickingToolbar />}
           {editable && <FilamentEditToolbar />}
+          {editable && <CellCanvasPanel paneRefs={paneRefs} />}
           <ViewerControls onResetViews={resetViews} />
           <Box sx={{ flexGrow: 1, position: "relative", overflow: "hidden" }}>
             <ViewerStage

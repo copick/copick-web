@@ -17,7 +17,15 @@ MOUNT = "/copick-web"
 INDEX = "<!doctype html><title>copick-web test client</title>"
 
 #: Values of the path parameters of the routes that change project data, on the demo project.
-PATH_VALUES = {"run_name": RUN, "object_name": "ribosome", "user_id": "alice", "session_id": "1", "name": "ribosome"}
+PATH_VALUES = {
+    "run_name": RUN,
+    "object_name": "ribosome",
+    "user_id": "alice",
+    "session_id": "1",
+    "name": "ribosome",
+    "binding_id": "none",
+    "kind": "train",
+}
 
 
 @pytest.fixture

@@ -105,6 +105,11 @@ class CopickService:
                 self._stores.clear()
             return len(root.runs)
 
+    def clear_stores(self) -> None:
+        """Forget opened Zarr stores, after a writer created or replaced a store in place."""
+        with self._stores_lock:
+            self._stores.clear()
+
     def sweep_caches(self) -> int:
         """Drop expired cache entries (run periodically by the app); returns how many."""
         return self.thumbnails.sweep() + self._measurements.sweep()

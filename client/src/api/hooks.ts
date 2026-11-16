@@ -11,6 +11,7 @@ import { MeshSource } from "@idetik/core";
 import type { ChunkLoaderLike } from "@/idetik/ChannelViewSource";
 import { segmentationMeshes } from "@/isosurface/computeMeshes";
 import { api } from "./client";
+import { refreshProjectData, revisionKey } from "./projectRevision";
 import { clearThumbnails } from "@/components/gallery/thumbnails";
 import { useProjectId } from "@/contexts/CopickContext";
 import { canEdit } from "@/utils/readOnly";
@@ -111,13 +112,24 @@ export function useReloadProject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api.reloadProject(projectId),
-    onSuccess: () => {
+    onSuccess: async () => {
       clearThumbnails(projectId);
-      return queryClient.invalidateQueries({
-        predicate: (q) => q.queryKey[1] === projectId,
-      });
+      await refreshProjectData(queryClient, projectId);
     },
   });
+}
+
+/** Changes only after an explicit successful project reload, not on metadata polling. */
+export function useProjectRevision() {
+  const projectId = useProjectId();
+  return useQuery({
+    queryKey: revisionKey(projectId),
+    queryFn: () => "initial",
+    initialData: "initial",
+    enabled: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  }).data;
 }
 
 export function useRuns() {
@@ -215,6 +227,7 @@ export function useInstances(
   level = 1,
 ) {
   const projectId = useProjectId();
+  const revision = useProjectRevision();
   return useQuery({
     queryKey: [
       "instances",
@@ -225,6 +238,7 @@ export function useInstances(
       seg?.userId,
       seg?.sessionId,
       seg?.voxelSize,
+      revision,
       level,
     ],
     queryFn: () =>
@@ -260,6 +274,7 @@ export function useSurfacePoints(
   enabled: boolean,
 ) {
   const projectId = useProjectId();
+  const revision = useProjectRevision();
   return useQuery({
     queryKey: [
       "surface",
@@ -270,6 +285,7 @@ export function useSurfacePoints(
       seg?.userId,
       seg?.sessionId,
       seg?.voxelSize,
+      revision,
     ],
     queryFn: () =>
       api.getSurfacePoints(
@@ -345,6 +361,7 @@ export function useSegmentationMeshes(
   enabled: boolean,
 ) {
   const projectId = useProjectId();
+  const revision = useProjectRevision();
   return useQuery({
     queryKey: [
       "isosurface",
@@ -355,6 +372,7 @@ export function useSegmentationMeshes(
       seg?.userId,
       seg?.sessionId,
       seg?.voxelSize,
+      revision,
     ],
     queryFn: ({ signal }) => segmentationMeshes(loaders!, signal),
     enabled: enabled && !!runName && !!seg && !!loaders,
